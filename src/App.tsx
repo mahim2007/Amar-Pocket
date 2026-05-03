@@ -404,136 +404,133 @@ export default function App() {
 
   // --- Dashboard ---
   return (
-    <div className="min-h-screen bg-[#F0F2F5] text-slate-900 pb-32">
-      {/* Premium Header */}
-      <div className="bg-slate-950 text-white pt-10 pb-20 px-6 rounded-b-[2.5rem] shadow-2xl relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/10 blur-[80px] rounded-full translate-x-1/2 -translate-y-1/2" />
-        
-        <div className="max-w-md mx-auto relative z-10">
-          <div className="flex justify-between items-center mb-6">
-            <div className="flex items-center gap-3">
-              <div className="w-11 h-11 rounded-2xl overflow-hidden border-2 border-emerald-500 ring-4 ring-emerald-500/10 shadow-xl">
-                 {user.photoURL ? (
-                   <img src={user.photoURL} alt="User" referrerPolicy="no-referrer" />
-                 ) : (
-                   <div className="w-full h-full bg-emerald-500 flex items-center justify-center text-white font-bold text-lg uppercase">
-                     {user.displayName?.[0] || user.email?.[0]}
-                   </div>
-                 )}
-              </div>
+    <div className="min-h-screen bg-slate-50 text-slate-900 pb-32 font-sans">
+      {/* Top Navigation */}
+      <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-lg border-b border-slate-100 px-6 py-4">
+        <div className="max-w-md mx-auto flex justify-between items-center">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-emerald-500 overflow-hidden shadow-lg shadow-emerald-500/20 border-2 border-white">
+               {user.photoURL ? (
+                 <img src={user.photoURL} alt="User" referrerPolicy="no-referrer" />
+               ) : (
+                 <div className="w-full h-full flex items-center justify-center text-white font-black text-sm uppercase">
+                   {user.displayName?.[0] || user.email?.[0]}
+                 </div>
+               )}
+            </div>
+            <div>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">শুভ দিন,</p>
+              <h2 className="font-bold text-sm text-slate-800">{user.displayName?.split(' ')[0] || 'ইউজার'}</h2>
+            </div>
+          </div>
+          <button 
+            onClick={handleLogout} 
+            className="w-10 h-10 flex items-center justify-center bg-slate-100 text-slate-500 rounded-2xl hover:bg-rose-50 hover:text-rose-500 transition-all font-bold"
+          >
+             <LogOut className="w-5 h-5" />
+          </button>
+        </div>
+      </header>
+
+      <main className="max-w-md mx-auto px-6 pt-6 space-y-6">
+        {/* Main Balance Card */}
+        <section className="relative group">
+          <div className="absolute inset-0 bg-emerald-500 blur-[40px] opacity-10 group-hover:opacity-20 transition-opacity rounded-[2.5rem]" />
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="relative bg-white rounded-[2.5rem] p-8 shadow-xl shadow-slate-200/40 border border-white"
+          >
+            <div className="flex justify-between items-start mb-6">
               <div>
-                <p className="text-slate-400 text-[9px] font-bold uppercase tracking-widest mb-0.5">শুভেচ্ছা,</p>
-                <h2 className="font-bold text-base truncate max-w-[150px]">{user.displayName?.split(' ')[0] || 'ইউজার'} 👋</h2>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2">মোট ব্যালেন্স</p>
+                <h1 className="text-4xl font-black text-slate-900 tracking-tight">
+                  <span className="text-emerald-500 text-2xl mr-1 font-bold">৳</span>
+                  {balance.toLocaleString('en-US')}
+                </h1>
+              </div>
+              <div className="w-12 h-12 bg-slate-50 rounded-2xl flex items-center justify-center">
+                <Wallet className="w-6 h-6 text-slate-400" />
               </div>
             </div>
-            <button onClick={handleLogout} className="p-2 bg-white/5 rounded-xl hover:bg-white/10 transition-all text-slate-300">
-               <LogOut className="w-5 h-5" />
-            </button>
-          </div>
 
-          <div className="text-center">
-            <p className="text-emerald-400 text-[10px] font-bold uppercase tracking-widest mb-1 opacity-80">আপনার বর্তমান ব্যালেন্স</p>
-            <h1 className="text-4xl font-black tracking-tight">
-              <span className="text-emerald-500 text-2xl mr-1">৳</span>
-              {balance.toLocaleString('en-US')}
-            </h1>
-          </div>
-        </div>
-      </div>
-
-      {/* Stats Quick Cards */}
-      <div className="max-w-md mx-auto -mt-12 px-6 space-y-6">
-        <div className="grid grid-cols-2 gap-4">
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-white p-5 rounded-[2rem] shadow-xl shadow-slate-200/50 border border-slate-100"
-          >
-            <div className="w-10 h-10 bg-emerald-100 rounded-2xl flex items-center justify-center text-emerald-600 mb-4">
-              <TrendingUp className="w-5 h-5" />
+            <div className="grid grid-cols-2 gap-4 pt-6 border-t border-slate-50">
+              <div className="space-y-1">
+                <div className="flex items-center gap-1.5 text-emerald-600">
+                  <ArrowUpCircle className="w-4 h-4 font-bold" />
+                  <span className="text-[10px] font-black uppercase tracking-wider">আয়</span>
+                </div>
+                <p className="text-lg font-black text-slate-800">৳{summary.income.toLocaleString('en-US')}</p>
+              </div>
+              <div className="space-y-1 border-l border-slate-100 pl-4">
+                <div className="flex items-center gap-1.5 text-rose-500">
+                  <ArrowDownCircle className="w-4 h-4 font-bold" />
+                  <span className="text-[10px] font-black uppercase tracking-wider">ব্যয়</span>
+                </div>
+                <p className="text-lg font-black text-slate-800">৳{summary.expense.toLocaleString('en-US')}</p>
+              </div>
             </div>
-            <p className="text-slate-400 text-[10px] font-black uppercase mb-1">মোট আয়</p>
-            <h3 className="text-xl font-black text-slate-900 leading-none">৳{summary.income.toLocaleString('en-US')}</h3>
           </motion.div>
-
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="bg-white p-5 rounded-[2rem] shadow-xl shadow-slate-200/50 border border-slate-100"
-          >
-            <div className="w-10 h-10 bg-rose-100 rounded-2xl flex items-center justify-center text-rose-600 mb-4">
-              <TrendingDown className="w-5 h-5" />
-            </div>
-            <p className="text-slate-400 text-[10px] font-black uppercase mb-1">মোট ব্যয়</p>
-            <h3 className="text-xl font-black text-slate-900 leading-none">৳{summary.expense.toLocaleString('en-US')}</h3>
-          </motion.div>
-        </div>
-
-        {/* Report Download Pills */}
-        <section className="bg-white rounded-[2.5rem] p-6 shadow-xl shadow-slate-200/50 border border-slate-100">
-          <div className="flex items-center gap-2 mb-4">
-            <Download className="w-4 h-4 text-blue-500" />
-            <h3 className="font-black text-sm uppercase text-slate-800">রিপোর্ট ডাউনলোড করুন</h3>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-             {[
-               { l: 'আজকের', d: 1 },
-               { l: '৭ দিনের', d: 7 },
-               { l: '১ মাসের', d: 30 },
-               { l: 'আজীবন', d: 'all' }
-             ].map((opt) => (
-               <button 
-                 key={opt.l}
-                 onClick={() => exportPDFWithCanvas(opt.d as any)}
-                 disabled={isExporting}
-                 className="flex items-center justify-between px-4 py-3 bg-slate-50 hover:bg-slate-100 rounded-2xl text-xs font-bold transition-all border border-slate-100 disabled:opacity-50"
-               >
-                 <span>{opt.l}</span>
-                 {isExporting && exportDays === opt.d ? <Loader2 className="w-3 h-3 animate-spin" /> : <ChevronRight className="w-3 h-3 text-slate-400" />}
-               </button>
-             ))}
-          </div>
         </section>
 
+        {/* Action Pills for Report */}
+        <div className="overflow-x-auto no-scrollbar -mx-2 px-2">
+          <div className="flex gap-3 pb-2">
+            {[
+              { l: '৭ দিন', d: 7 },
+              { l: '৩০ দিন', d: 30 },
+              { l: 'আজীবন', d: 'all' }
+            ].map((opt) => (
+              <button 
+                key={opt.l}
+                onClick={() => exportPDFWithCanvas(opt.d as any)}
+                disabled={isExporting}
+                className="flex items-center gap-2 px-6 py-3 bg-white hover:bg-slate-900 hover:text-white rounded-2xl text-[10px] font-black transition-all border border-slate-100 shadow-sm whitespace-nowrap group disabled:opacity-50"
+              >
+                {isExporting && exportDays === opt.d ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3 text-emerald-500 group-hover:text-white" />}
+                {opt.l} রিপোর্ট
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* Recent Transactions List */}
-        <section>
-          <div className="flex justify-between items-end mb-4 px-2">
-            <div>
-              <h3 className="font-black text-lg text-slate-900">সাম্প্রতিক রেকর্ড</h3>
-              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">সর্বশেষ আপডেট ডাটা</p>
+        <section className="space-y-4">
+          <div className="flex justify-between items-end px-1">
+            <h3 className="font-black text-lg text-slate-800 tracking-tight">রেকর্ডসমূহ</h3>
+            <div className="flex items-center gap-1 bg-white px-3 py-1 rounded-full border border-slate-100 text-[9px] font-black text-slate-400 uppercase tracking-widest shadow-sm">
+               সাম্প্রতিক তথ্য
             </div>
-            <History className="w-5 h-5 text-slate-300" />
           </div>
 
-          <div className="space-y-4">
+          <div className="space-y-3">
             <AnimatePresence initial={false}>
               {transactions.length === 0 ? (
-                <div className="text-center py-12 bg-white rounded-[2rem] border border-dashed border-slate-300">
-                   <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <LayoutDashboard className="w-6 h-6 text-slate-400" />
+                <div className="text-center py-20 bg-white rounded-[2.5rem] border border-dashed border-slate-200">
+                   <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-200">
+                      <History className="w-8 h-8" />
                    </div>
-                   <p className="text-slate-400 font-bold text-sm">কোনো তথ্য পাওয়া যায়নি</p>
+                   <p className="text-slate-400 font-bold text-xs uppercase tracking-widest">রেকর্ড পাওয়া যায়নি</p>
                 </div>
               ) : (
                 transactions.map((tx, i) => (
                   <motion.div
                     key={tx.id}
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: i * 0.05 }}
-                    className="bg-white p-4 rounded-3xl shadow-sm border border-slate-100 flex items-center justify-between group group/tx"
+                    className="bg-white p-5 rounded-[2rem] shadow-sm border border-slate-50 flex items-center justify-between group active:scale-[0.98] transition-all"
                   >
                     <div className="flex items-center gap-4">
                       <div className={cn(
-                        "w-12 h-12 rounded-2xl flex items-center justify-center shrink-0",
-                        tx.type === 'income' ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"
+                        "w-12 h-12 rounded-[1.25rem] flex items-center justify-center shrink-0 shadow-sm",
+                        tx.type === 'income' ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-500"
                       )}>
-                        {tx.type === 'income' ? <Plus className="w-6 h-6" /> : <Minus className="w-6 h-6" />}
+                        {tx.type === 'income' ? <PlusCircle className="w-5 h-5" /> : <Minus className="w-5 h-5" />}
                       </div>
                       <div>
-                        <h4 className="font-black text-sm text-slate-800">{tx.category}</h4>
-                        <div className="flex items-center gap-2 text-[10px] text-slate-400 font-bold uppercase">
+                        <h4 className="font-black text-sm text-slate-800 mb-0.5">{tx.category}</h4>
+                        <div className="flex items-center gap-2 text-[9px] text-slate-400 font-bold uppercase tracking-[0.05em]">
                           <span>{format(new Date(tx.date), 'dd MMM', { locale: bn })}</span>
                           <span className="w-1 h-1 bg-slate-200 rounded-full" />
                           <span>{tx.time}</span>
@@ -544,8 +541,8 @@ export default function App() {
                     <div className="flex items-center gap-3">
                       <div className="text-right">
                         <p className={cn(
-                          "font-black text-lg",
-                          tx.type === 'income' ? "text-emerald-600" : "text-rose-600"
+                          "font-black text-base italic",
+                          tx.type === 'income' ? "text-emerald-600" : "text-rose-500"
                         )}>
                           {tx.type === 'income' ? '+' : '-'} ৳{tx.amount.toLocaleString('en-US')}
                         </p>
@@ -553,7 +550,7 @@ export default function App() {
                       </div>
                       <button 
                         onClick={() => deleteTransaction(tx.id)}
-                        className="p-2 text-slate-200 hover:text-rose-500 transition-all opacity-0 group-hover:opacity-100"
+                        className="p-2 text-slate-200 hover:text-rose-500 transition-all md:opacity-0 group-hover:opacity-100"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -564,16 +561,16 @@ export default function App() {
             </AnimatePresence>
           </div>
         </section>
-      </div>
+      </main>
 
-      {/* Bottom Sticky Action Bar */}
-      <div className="fixed bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-slate-900 to-transparent pointer-events-none z-20">
+      {/* Floating Action Button */}
+      <div className="fixed bottom-8 left-0 right-0 px-6 z-50 pointer-events-none">
         <div className="max-w-md mx-auto flex justify-center pointer-events-auto">
           <button 
             onClick={() => setIsAdding(true)}
-            className="flex items-center gap-3 bg-emerald-500 text-slate-950 px-8 py-4 rounded-[2rem] font-black text-lg shadow-2xl shadow-emerald-500/40 active:scale-95 transition-all"
+            className="flex items-center gap-3 bg-slate-900 text-white px-8 py-5 rounded-[2.5rem] font-black text-base shadow-2xl shadow-slate-900/40 active:scale-95 transition-all"
           >
-            <PlusCircle className="w-6 h-6" />
+            <PlusCircle className="w-5 h-5 text-emerald-400" />
             হিসাব যোগ করুন
           </button>
         </div>
