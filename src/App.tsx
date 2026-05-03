@@ -3,18 +3,16 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   Plus, 
   Minus, 
   Download, 
   Trash2, 
-  Calendar, 
   Wallet, 
   ArrowUpCircle, 
   ArrowDownCircle,
   Clock,
-  ChevronRight,
   Filter,
   X,
   LogOut,
@@ -23,13 +21,21 @@ import {
   Mail,
   Lock,
   User as UserIcon,
-  AlertCircle
+  AlertCircle,
+  TrendingUp,
+  TrendingDown,
+  History,
+  LayoutDashboard,
+  Settings,
+  ChevronRight,
+  PlusCircle,
+  ArrowRight
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { format, subDays, isAfter } from 'date-fns';
 import { bn } from 'date-fns/locale';
 import { jsPDF } from "jspdf";
-import autoTable from 'jspdf-autotable';
+import html2canvas from 'html2canvas';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
@@ -100,6 +106,11 @@ export default function App() {
   const [authError, setAuthError] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
 
+  // PDF Export State
+  const reportRef = useRef<HTMLDivElement>(null);
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportDays, setExportDays] = useState<number | 'all'>(7);
+
   // Handle Auth
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -154,8 +165,7 @@ export default function App() {
     try {
       await signInWithPopup(auth, googleProvider);
     } catch (error: any) {
-      console.error('Google Login failed', error);
-      setAuthError('Google লগইন ব্যর্থ হয়েছে। আবার চেষ্টা করুন।');
+      setAuthError('Google লগইন ব্যর্থ হয়েছে।');
     } finally {
       setAuthLoading(false);
     }
@@ -174,21 +184,17 @@ export default function App() {
         await signInWithEmailAndPassword(auth, email, password);
       }
     } catch (error: any) {
-      console.error('Email Auth failed', error);
       if (error.code === 'auth/email-already-in-use') setAuthError('এই ইমেইলটি ইতিপূর্বে ব্যবহার করা হয়েছে।');
       else if (error.code === 'auth/wrong-password') setAuthError('পাসওয়ার্ড সঠিক নয়।');
-      else if (error.code === 'auth/user-not-found') setAuthError('এই ইমেইলে কোনো অ্যাকাউন্ট পাওয়া যায়নি।');
-      else setAuthError('লগইন/সাইনআপ ব্যর্থ হয়েছে। দয়া করে তথ্যগুলো যাচাই করুন।');
+      else setAuthError('লগইন ব্যর্থ হয়েছে। তথ্য যাচাই করুন।');
     } finally {
       setAuthLoading(false);
     }
   };
 
   const handleLogout = async () => {
-    try {
+    if (window.confirm('আপনি কি লগ-আউট করতে চান?')) {
       await signOut(auth);
-    } catch (error) {
-      console.error('Logout failed', error);
     }
   };
 
@@ -210,7 +216,9 @@ export default function App() {
 
     try {
       await addDoc(collection(db, path), newTx);
-      resetForm();
+      setAmount('');
+      setCategory('');
+      setNote('');
       setIsAdding(false);
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, path);
@@ -218,107 +226,117 @@ export default function App() {
   };
 
   const deleteTransaction = async (id: string) => {
-    if (!user) return;
-    if (window.confirm('আপনি কি এই হিসাবটি মুছে ফেলতে চান?')) {
-      const path = `transactions/${id}`;
+    if (window.confirm('মুছে ফেলতে চান?')) {
       try {
         await deleteDoc(doc(db, 'transactions', id));
       } catch (error) {
-        handleFirestoreError(error, OperationType.DELETE, path);
+        handleFirestoreError(error, OperationType.DELETE, `transactions/${id}`);
       }
     }
   };
 
-  const resetForm = () => {
-    setAmount('');
-    setCategory('');
-    setNote('');
-    setType('expense');
+  // Improved PDF Export using html2canvas to support Bengali
+  const exportPDFWithCanvas = async (days: number | 'all') => {
+    setIsExporting(true);
+    setExportDays(days);
+    
+    // Wait for state update and rendering
+    setTimeout(async () => {
+      const element = reportRef.current;
+      if (!element) return;
+
+      try {
+        const canvas = await html2canvas(element, {
+          scale: 2,
+          useCORS: true,
+          logging: false,
+          backgroundColor: '#ffffff'
+        });
+        
+        const imgData = canvas.toDataURL('image/png');
+        const pdf = new jsPDF('p', 'mm', 'a4');
+        const imgWidth = 210;
+        const imgHeight = (canvas.height * imgWidth) / canvas.width;
+        
+        pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+        pdf.save(`amar_pocket_report_${days}.pdf`);
+      } catch (err) {
+        console.error('PDF Export failed', err);
+        alert('পিডিএফ এক্সপোর্ট করা সম্ভব হচ্ছে না।');
+      } finally {
+        setIsExporting(false);
+      }
+    }, 500);
   };
 
-  // PDF Export
-  const exportPDF = (days: number | 'all') => {
-    const doc = new jsPDF();
-    const filteredTx = days === 'all' 
-      ? transactions 
-      : transactions.filter(t => isAfter(new Date(t.date), subDays(new Date(), days)));
-
-    const title = days === 'all' 
-      ? 'Full Hishab Report' 
-      : `Last ${days} Days Report`;
-
-    doc.setFontSize(20);
-    doc.text('Amar Pocket (আমার পকেট)', 14, 20);
-    doc.setFontSize(12);
-    doc.text(`${title} - ${format(new Date(), 'dd/MM/yyyy')}`, 14, 30);
-
-    const tableData = filteredTx.map(t => [
-      format(new Date(t.date), 'dd/MM/yyyy'),
-      t.time,
-      t.category,
-      t.type === 'income' ? 'Income' : 'Expense',
-      t.amount.toLocaleString('en-US'),
-      t.note || '-'
-    ]);
-
-    autoTable(doc, {
-      startY: 40,
-      head: [['Date', 'Time', 'Category', 'Type', 'Amount', 'Note']],
-      body: tableData,
-      theme: 'striped',
-      headStyles: { fillColor: [15, 23, 42] },
-    });
-
-    const totalIncome = filteredTx.filter(t => t.type === 'income').reduce((a, b) => a + b.amount, 0);
-    const totalExpense = filteredTx.filter(t => t.type === 'expense').reduce((a, b) => a + b.amount, 0);
-
-    const finalY = (doc as any).lastAutoTable.finalY + 10;
-    doc.text(`Total Income: ${totalIncome.toLocaleString('en-US')}`, 14, finalY);
-    doc.text(`Total Expense: ${totalExpense.toLocaleString('en-US')}`, 14, finalY + 7);
-    doc.text(`Balance: ${(totalIncome - totalExpense).toLocaleString('en-US')}`, 14, finalY + 14);
-
-    doc.save(`amar_pocket_report_${days}.pdf`);
-  };
-
-  // Render Logic
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <Loader2 className="w-10 h-10 text-emerald-500 animate-spin" />
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-900">
+        <Loader2 className="w-12 h-12 text-emerald-500 animate-spin mb-4" />
+        <p className="text-slate-400 font-medium">অপেক্ষা করুন...</p>
       </div>
     );
   }
 
+  // --- Auth View ---
   if (!user) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6">
+      <div className="min-h-screen flex items-center justify-center bg-slate-950 p-6 relative overflow-hidden">
+        {/* Background Accents */}
+        <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-emerald-500/20 blur-[120px] rounded-full" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-blue-500/10 blur-[100px] rounded-full" />
+
         <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="max-w-md w-full bg-white p-8 rounded-3xl shadow-xl"
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="max-w-md w-full backdrop-blur-xl bg-white/10 p-8 rounded-[2.5rem] shadow-2xl border border-white/10 z-10"
         >
-          <div className="bg-emerald-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6 text-emerald-600">
-            <Wallet className="w-8 h-8" />
+          <div className="text-center mb-8">
+            <div className="bg-emerald-500 w-16 h-16 rounded-3xl flex items-center justify-center mx-auto mb-4 shadow-xl shadow-emerald-500/20 rotate-12">
+              <Wallet className="w-8 h-8 text-white -rotate-12" />
+            </div>
+            <h1 className="text-3xl font-black text-white mb-2 tracking-tight">আমার পকেট</h1>
+            <p className="text-slate-400 text-sm">আপনার দৈনন্দিন পকেট ডায়েরি</p>
           </div>
-          <h1 className="text-3xl font-bold text-slate-900 text-center mb-1">আমার পকেট</h1>
-          <p className="text-slate-500 text-center mb-8">সব হিসাব এখন আপনার হাতের মুঠোয়</p>
+
+          {/* Tab Switch */}
+          <div className="flex bg-white/5 rounded-2xl p-1 mb-6">
+            <button 
+              onClick={() => { setAuthMode('login'); setAuthError(''); }}
+              className={cn(
+                "flex-1 py-2.5 rounded-xl text-sm font-bold transition-all",
+                authMode === 'login' ? "bg-white text-slate-900 shadow-lg" : "text-slate-400 hover:text-white"
+              )}
+            >
+              লগইন
+            </button>
+            <button 
+              onClick={() => { setAuthMode('signup'); setAuthError(''); }}
+              className={cn(
+                "flex-1 py-2.5 rounded-xl text-sm font-bold transition-all",
+                authMode === 'signup' ? "bg-white text-slate-900 shadow-lg" : "text-slate-400 hover:text-white"
+              )}
+            >
+              সাইন আপ
+            </button>
+          </div>
 
           <form onSubmit={handleEmailAuth} className="space-y-4 mb-6">
             <AnimatePresence mode="wait">
               {authMode === 'signup' && (
                 <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
                 >
                   <div className="relative">
-                    <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                     <input 
                       type="text" 
-                      placeholder="আপনার নাম"
+                      placeholder="আপনার পূর্ণ নাম"
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
-                      className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500 transition-all text-sm"
+                      className="w-full pl-12 pr-4 py-4 bg-white/5 border border-white/10 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 text-white placeholder:text-slate-500 transition-all"
                       required
                     />
                   </div>
@@ -327,220 +345,197 @@ export default function App() {
             </AnimatePresence>
 
             <div className="relative">
-              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input 
                 type="email" 
                 placeholder="ইমেইল অ্যাড্রেস"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500 transition-all text-sm"
+                className="w-full pl-12 pr-4 py-4 bg-white/5 border border-white/10 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 text-white placeholder:text-slate-500 transition-all font-mono text-sm"
                 required
               />
             </div>
 
             <div className="relative">
-              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input 
                 type="password" 
                 placeholder="পাসওয়ার্ড"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500 transition-all text-sm"
+                className="w-full pl-12 pr-4 py-4 bg-white/5 border border-white/10 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 text-white placeholder:text-slate-500 transition-all font-mono"
                 required
                 minLength={6}
               />
             </div>
 
-            <AnimatePresence>
-              {authError && (
-                <motion.div 
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="flex items-center gap-2 p-3 bg-rose-50 text-rose-600 text-xs rounded-lg border border-rose-100"
-                >
-                  <AlertCircle className="w-4 h-4" />
-                  {authError}
-                </motion.div>
-              )}
-            </AnimatePresence>
+            {authError && (
+              <p className="text-rose-400 text-xs font-medium flex items-center gap-1">
+                <AlertCircle className="w-3 h-3" /> {authError}
+              </p>
+            )}
 
             <button 
               disabled={authLoading}
               type="submit"
-              className="w-full bg-emerald-600 text-white py-3 rounded-xl font-bold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100 flex items-center justify-center gap-2"
+              className="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 py-4 rounded-2xl font-black text-lg transition-all active:scale-[0.98] shadow-lg shadow-emerald-500/20 disabled:opacity-50"
             >
-              {authLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : (authMode === 'login' ? 'লগইন করুন' : 'অ্যাকাউন্ট তৈরি করুন')}
+              {authLoading ? <Loader2 className="w-6 h-6 animate-spin mx-auto" /> : (authMode === 'login' ? 'প্রবেশ করুন' : 'তৈরি করুন')}
             </button>
           </form>
-          
+
           <div className="relative mb-6">
-            <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-100"></div></div>
-            <div className="relative flex justify-center text-xs"><span className="bg-white px-2 text-slate-400 uppercase">অথবা</span></div>
+            <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-white/10"></div></div>
+            <div className="relative flex justify-center text-xs"><span className="bg-[#0f172a] px-3 text-slate-500 font-bold">অথবা লগইন করুন</span></div>
           </div>
 
           <button 
-            disabled={authLoading}
             onClick={handleGoogleLogin}
-            className="w-full flex items-center justify-center gap-3 bg-white border border-slate-200 text-slate-700 py-3 rounded-xl font-bold hover:bg-slate-50 transition-all active:scale-95 mb-6"
+            disabled={authLoading}
+            className="w-full flex items-center justify-center gap-3 bg-white/5 border border-white/10 text-white py-4 rounded-2xl font-bold hover:bg-white/10 transition-all active:scale-[0.98]"
           >
-            <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/pwa/google.svg" className="w-5 h-5" alt="Google" />
-            Google দিয়ে লগইন
+            <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/pwa/google.svg" className="w-5 h-5 flex-shrink-0" alt="GMail" />
+            Google অ্যাকাউন্ট দিয়ে
           </button>
-
-          <p className="text-sm text-slate-500">
-            {authMode === 'login' ? "অ্যাকাউন্ট নেই? " : "ইতিমধ্যে অ্যাকাউন্ট আছে? "}
-            <button 
-              onClick={() => {
-                setAuthMode(authMode === 'login' ? 'signup' : 'login');
-                setAuthError('');
-              }}
-              className="text-emerald-600 font-bold hover:underline"
-            >
-              {authMode === 'login' ? "নতুন খুলুন" : "লগইন করুন"}
-            </button>
-          </p>
         </motion.div>
       </div>
     );
   }
 
+  // --- Dashboard ---
   return (
-    <div className="min-h-screen bg-slate-50 font-sans text-slate-900 pb-20">
-      {/* Header */}
-      <header className="bg-slate-900 text-white p-6 rounded-b-3xl shadow-lg mb-6 sticky top-0 z-10">
-        <div className="max-w-md mx-auto flex justify-between items-center">
-          <div className="flex items-center gap-3">
-             {user.photoURL ? (
-               <img src={user.photoURL} alt="Profile" className="w-10 h-10 rounded-full border-2 border-emerald-400" referrerPolicy="no-referrer" />
-             ) : (
-               <div className="w-10 h-10 rounded-full bg-emerald-500 flex items-center justify-center font-bold text-white uppercase">
-                 {user.displayName?.[0] || user.email?.[0]}
-               </div>
-             )}
-             <div>
-               <h1 className="text-xl font-bold flex items-center gap-2">আমার পকেট</h1>
-               <p className="text-slate-400 text-[10px] truncate max-w-[120px]">{user.displayName || user.email}</p>
-             </div>
+    <div className="min-h-screen bg-[#F0F2F5] text-slate-900 pb-32">
+      {/* Premium Header */}
+      <div className="bg-slate-950 text-white pt-8 pb-32 px-6 rounded-b-[3rem] shadow-2xl relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/10 blur-[80px] rounded-full translate-x-1/2 -translate-y-1/2" />
+        
+        <div className="max-w-md mx-auto relative z-10">
+          <div className="flex justify-between items-center mb-8">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl overflow-hidden border-2 border-emerald-500 ring-4 ring-emerald-500/10 shadow-xl">
+                 {user.photoURL ? (
+                   <img src={user.photoURL} alt="User" referrerPolicy="no-referrer" />
+                 ) : (
+                   <div className="w-full h-full bg-emerald-500 flex items-center justify-center text-white font-bold text-xl uppercase">
+                     {user.displayName?.[0] || user.email?.[0]}
+                   </div>
+                 )}
+              </div>
+              <div>
+                <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-0.5">শুভেচ্ছা,</p>
+                <h2 className="font-bold text-lg truncate max-w-[150px]">{user.displayName?.split(' ')[0] || 'ইউজার'} 👋</h2>
+              </div>
+            </div>
+            <button onClick={handleLogout} className="p-2.5 bg-white/5 rounded-xl hover:bg-white/10 transition-all text-slate-300">
+               <LogOut className="w-5 h-5" />
+            </button>
           </div>
-          <div className="flex items-center gap-2">
-            <button 
-              onClick={handleLogout}
-              className="p-2 text-slate-300 hover:text-rose-400 transition-colors"
-              title="Logout"
-            >
-              <LogOut className="w-5 h-5" />
-            </button>
-            <button 
-              onClick={() => setIsAdding(true)}
-              className="p-3 bg-emerald-500 rounded-full hover:bg-emerald-600 transition-colors shadow-lg active:scale-95 ml-2"
-              id="add-btn"
-            >
-              <Plus className="w-6 h-6" />
-            </button>
+
+          <div className="text-center mb-4">
+            <p className="text-emerald-400 text-xs font-bold uppercase tracking-widest mb-2 opacity-80">আপনার বর্তমান ব্যালেন্স</p>
+            <h1 className="text-5xl font-black tracking-tight mb-2">
+              <span className="text-emerald-500 text-3xl mr-1">৳</span>
+              {balance.toLocaleString('en-US')}
+            </h1>
           </div>
         </div>
-      </header>
+      </div>
 
-      <main className="max-w-md mx-auto px-4">
-        {/* Balance Card */}
-        <section className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 mb-6">
-          <p className="text-slate-500 text-sm mb-1">মোট অবশিষ্ট অর্থ</p>
-          <h2 className={cn(
-            "text-4xl font-bold mb-6",
-            balance >= 0 ? "text-slate-900" : "text-rose-600"
-          )}>
-            ৳{balance.toLocaleString('bn-BD')}
-          </h2>
-          
-          <div className="grid grid-cols-2 gap-4">
-            <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-100">
-              <div className="flex items-center gap-2 text-emerald-700 text-sm font-medium mb-1">
-                <ArrowUpCircle className="w-4 h-4" />
-                আয় (Income)
-              </div>
-              <p className="text-lg font-bold text-emerald-800">৳{summary.income.toLocaleString('bn-BD')}</p>
+      {/* Stats Quick Cards */}
+      <div className="max-w-md mx-auto -mt-20 px-6 space-y-6">
+        <div className="grid grid-cols-2 gap-4">
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-white p-5 rounded-[2rem] shadow-xl shadow-slate-200/50 border border-slate-100"
+          >
+            <div className="w-10 h-10 bg-emerald-100 rounded-2xl flex items-center justify-center text-emerald-600 mb-4">
+              <TrendingUp className="w-5 h-5" />
             </div>
-            <div className="bg-rose-50 p-4 rounded-xl border border-rose-100">
-              <div className="flex items-center gap-2 text-rose-700 text-sm font-medium mb-1">
-                <ArrowDownCircle className="w-4 h-4" />
-                ব্যয় (Expense)
-              </div>
-              <p className="text-lg font-bold text-rose-800">৳{summary.expense.toLocaleString('bn-BD')}</p>
+            <p className="text-slate-400 text-[10px] font-black uppercase mb-1">মোট আয়</p>
+            <h3 className="text-xl font-black text-slate-900 leading-none">৳{summary.income.toLocaleString('en-US')}</h3>
+          </motion.div>
+
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+            className="bg-white p-5 rounded-[2rem] shadow-xl shadow-slate-200/50 border border-slate-100"
+          >
+            <div className="w-10 h-10 bg-rose-100 rounded-2xl flex items-center justify-center text-rose-600 mb-4">
+              <TrendingDown className="w-5 h-5" />
             </div>
+            <p className="text-slate-400 text-[10px] font-black uppercase mb-1">মোট ব্যয়</p>
+            <h3 className="text-xl font-black text-slate-900 leading-none">৳{summary.expense.toLocaleString('en-US')}</h3>
+          </motion.div>
+        </div>
+
+        {/* Report Download Pills */}
+        <section className="bg-white rounded-[2.5rem] p-6 shadow-xl shadow-slate-200/50 border border-slate-100">
+          <div className="flex items-center gap-2 mb-4">
+            <Download className="w-4 h-4 text-blue-500" />
+            <h3 className="font-black text-sm uppercase text-slate-800">রিপোর্ট ডাউনলোড করুন</h3>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+             {[
+               { l: 'আজকের', d: 1 },
+               { l: '৭ দিনের', d: 7 },
+               { l: '১ মাসের', d: 30 },
+               { l: 'আজীবন', d: 'all' }
+             ].map((opt) => (
+               <button 
+                 key={opt.l}
+                 onClick={() => exportPDFWithCanvas(opt.d as any)}
+                 disabled={isExporting}
+                 className="flex items-center justify-between px-4 py-3 bg-slate-50 hover:bg-slate-100 rounded-2xl text-xs font-bold transition-all border border-slate-100 disabled:opacity-50"
+               >
+                 <span>{opt.l}</span>
+                 {isExporting && exportDays === opt.d ? <Loader2 className="w-3 h-3 animate-spin" /> : <ChevronRight className="w-3 h-3 text-slate-400" />}
+               </button>
+             ))}
           </div>
         </section>
 
-        {/* Export Options */}
-        <section className="mb-6 overflow-x-auto">
-          <div className="flex gap-2 pb-2">
-            <button 
-              onClick={() => exportPDF(1)}
-              className="flex-shrink-0 flex items-center gap-2 px-4 py-2 bg-white rounded-full border border-slate-200 text-xs font-semibold hover:border-slate-900 transition-all shadow-sm"
-              id="export-today"
-            >
-              <Download className="w-3 h-3" /> আজকের রিপোর্ট
-            </button>
-            <button 
-              onClick={() => exportPDF(7)}
-              className="flex-shrink-0 flex items-center gap-2 px-4 py-2 bg-white rounded-full border border-slate-200 text-xs font-semibold hover:border-slate-900 transition-all shadow-sm"
-            >
-              <Download className="w-3 h-3" /> ৭ দিনের
-            </button>
-            <button 
-              onClick={() => exportPDF(30)}
-              className="flex-shrink-0 flex items-center gap-2 px-4 py-2 bg-white rounded-full border border-slate-200 text-xs font-semibold hover:border-slate-900 transition-all shadow-sm"
-            >
-              <Download className="w-3 h-3" /> ১ মাসের
-            </button>
-            <button 
-              onClick={() => exportPDF('all')}
-              className="flex-shrink-0 flex items-center gap-2 px-4 py-2 bg-white rounded-full border border-slate-200 text-xs font-semibold hover:border-slate-900 transition-all shadow-sm"
-            >
-              <Download className="w-3 h-3" /> আজীবন
-            </button>
-          </div>
-        </section>
-
-        {/* Transactions List */}
+        {/* Recent Transactions List */}
         <section>
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="font-bold text-slate-800">সাম্প্রতিক লেনদেন</h3>
-            <div className="flex items-center gap-1 text-xs text-slate-500 font-medium">
-              <Clock className="w-3 h-3" /> রিয়েল-টাইম ডাটা
+          <div className="flex justify-between items-end mb-4 px-2">
+            <div>
+              <h3 className="font-black text-lg text-slate-900">সাম্প্রতিক রেকর্ড</h3>
+              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">সর্বশেষ আপডেট ডাটা</p>
             </div>
+            <History className="w-5 h-5 text-slate-300" />
           </div>
 
-          <div className="space-y-3">
+          <div className="space-y-4">
             <AnimatePresence initial={false}>
               {transactions.length === 0 ? (
-                <div className="text-center py-10 opacity-50">
-                  <div className="bg-slate-200 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <Filter className="text-slate-400" />
-                  </div>
-                  <p>এখনো কোনো হিসাব যোগ করা হয়নি</p>
+                <div className="text-center py-12 bg-white rounded-[2rem] border border-dashed border-slate-300">
+                   <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <LayoutDashboard className="w-6 h-6 text-slate-400" />
+                   </div>
+                   <p className="text-slate-400 font-bold text-sm">কোনো তথ্য পাওয়া যায়নি</p>
                 </div>
               ) : (
-                transactions.map((tx) => (
+                transactions.map((tx, i) => (
                   <motion.div
                     key={tx.id}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.95 }}
-                    className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 flex items-center justify-between group"
-                    id={`tx-${tx.id}`}
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: i * 0.05 }}
+                    className="bg-white p-4 rounded-3xl shadow-sm border border-slate-100 flex items-center justify-between group group/tx"
                   >
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-4">
                       <div className={cn(
-                        "p-2 rounded-lg",
-                        tx.type === 'income' ? "bg-emerald-100 text-emerald-600" : "bg-rose-100 text-rose-600"
+                        "w-12 h-12 rounded-2xl flex items-center justify-center shrink-0",
+                        tx.type === 'income' ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"
                       )}>
-                        {tx.type === 'income' ? <ArrowUpCircle className="w-5 h-5" /> : <ArrowDownCircle className="w-5 h-5" />}
+                        {tx.type === 'income' ? <Plus className="w-6 h-6" /> : <Minus className="w-6 h-6" />}
                       </div>
                       <div>
-                        <h4 className="font-bold text-sm">{tx.category}</h4>
-                        <div className="flex items-center gap-2 text-[10px] text-slate-400">
+                        <h4 className="font-black text-sm text-slate-800">{tx.category}</h4>
+                        <div className="flex items-center gap-2 text-[10px] text-slate-400 font-bold uppercase">
                           <span>{format(new Date(tx.date), 'dd MMM', { locale: bn })}</span>
-                          <span>•</span>
+                          <span className="w-1 h-1 bg-slate-200 rounded-full" />
                           <span>{tx.time}</span>
                         </div>
                       </div>
@@ -549,16 +544,16 @@ export default function App() {
                     <div className="flex items-center gap-3">
                       <div className="text-right">
                         <p className={cn(
-                          "font-bold",
+                          "font-black text-lg",
                           tx.type === 'income' ? "text-emerald-600" : "text-rose-600"
                         )}>
-                          {tx.type === 'income' ? '+' : '-'} ৳{tx.amount.toLocaleString('bn-BD')}
+                          {tx.type === 'income' ? '+' : '-'} ৳{tx.amount.toLocaleString('en-US')}
                         </p>
-                        {tx.note && <p className="text-[10px] text-slate-400 truncate max-w-[80px]">{tx.note}</p>}
+                        {tx.note && <p className="text-[10px] text-slate-400 font-medium truncate max-w-[80px]">{tx.note}</p>}
                       </div>
                       <button 
                         onClick={() => deleteTransaction(tx.id)}
-                        className="p-2 text-slate-300 hover:text-rose-500 transition-colors opacity-0 group-hover:opacity-100"
+                        className="p-2 text-slate-200 hover:text-rose-500 transition-all opacity-0 group-hover:opacity-100"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -569,110 +564,138 @@ export default function App() {
             </AnimatePresence>
           </div>
         </section>
-      </main>
+      </div>
 
-      {/* Add Modal */}
+      {/* Bottom Sticky Action Bar */}
+      <div className="fixed bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-slate-900 to-transparent pointer-events-none z-20">
+        <div className="max-w-md mx-auto flex justify-center pointer-events-auto">
+          <button 
+            onClick={() => setIsAdding(true)}
+            className="flex items-center gap-3 bg-emerald-500 text-slate-950 px-8 py-4 rounded-[2rem] font-black text-lg shadow-2xl shadow-emerald-500/40 active:scale-95 transition-all"
+          >
+            <PlusCircle className="w-6 h-6" />
+            হিসাব যোগ করুন
+          </button>
+        </div>
+      </div>
+
+      {/* --- ADD MODAL --- */}
       <AnimatePresence>
         {isAdding && (
-          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
+          <div className="fixed inset-0 z-[100] flex items-end justify-center p-0 md:p-6 md:items-center">
             <motion.div 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsAdding(false)}
-              className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+              className="absolute inset-0 bg-slate-950/80 backdrop-blur-md"
             />
             
             <motion.div
               initial={{ y: "100%" }}
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
-              className="relative w-full max-w-md bg-white rounded-t-3xl sm:rounded-3xl p-6 shadow-2xl"
-              id="add-modal"
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              className="relative w-full max-w-md bg-white rounded-t-[3rem] md:rounded-[3rem] p-8 shadow-2xl"
             >
-              <div className="flex justify-between items-center mb-6">
-                <h3 className="text-xl font-bold">নতুন হিসাব যোগ করুন</h3>
-                <button onClick={() => setIsAdding(false)} className="p-2 hover:bg-slate-100 rounded-full">
+              <div className="flex justify-between items-center mb-8">
+                <div>
+                  <h3 className="text-2xl font-black text-slate-900">নতুন এন্ট্রি</h3>
+                  <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mt-1">সঠিক তথ্য দিয়ে পূরণ করুন</p>
+                </div>
+                <button 
+                  onClick={() => setIsAdding(false)} 
+                  className="w-10 h-10 flex items-center justify-center bg-slate-50 text-slate-400 rounded-full hover:bg-slate-100"
+                >
                   <X className="w-6 h-6" />
                 </button>
               </div>
 
-              <form onSubmit={addTransaction} className="space-y-4">
+              <form onSubmit={addTransaction} className="space-y-6">
                 {/* Type Toggle */}
-                <div className="flex p-1 bg-slate-100 rounded-xl">
+                <div className="flex p-1.5 bg-slate-100 rounded-2xl border border-slate-200">
                   <button
                     type="button"
                     onClick={() => setType('expense')}
                     className={cn(
-                      "flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-bold transition-all",
-                      type === 'expense' ? "bg-white text-rose-600 shadow-sm" : "text-slate-500"
+                      "flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-black transition-all",
+                      type === 'expense' ? "bg-white text-rose-600 shadow-xl border border-slate-100" : "text-slate-500"
                     )}
                   >
-                    <Minus className="w-4 h-4" /> ব্যয় (Expense)
+                    <ArrowDownCircle className="w-4 h-4" /> ব্যয়
                   </button>
                   <button
                     type="button"
                     onClick={() => setType('income')}
                     className={cn(
-                      "flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-bold transition-all",
-                      type === 'income' ? "bg-white text-emerald-600 shadow-sm" : "text-slate-500"
+                      "flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-black transition-all",
+                      type === 'income' ? "bg-white text-emerald-600 shadow-xl border border-slate-100" : "text-slate-500"
                     )}
                   >
-                    <Plus className="w-4 h-4" /> আয় (Income)
+                    <ArrowUpCircle className="w-4 h-4" /> আয়
                   </button>
                 </div>
 
                 {/* Amount */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider">টাকার পরিমাণ</label>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">টাকার পরিমাণ</label>
                   <div className="relative">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">৳</span>
+                    <span className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-300 text-2xl font-black">৳</span>
                     <input 
                       type="number" 
                       value={amount}
                       onChange={(e) => setAmount(e.target.value)}
                       placeholder="0.00"
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-8 pr-4 text-xl font-bold focus:ring-2 focus:ring-slate-900 focus:border-transparent outline-none transition-all"
+                      className="w-full bg-slate-50 border border-slate-100 rounded-3xl py-6 pl-12 pr-6 text-3xl font-black text-slate-900 focus:bg-white focus:ring-4 focus:ring-emerald-500/10 outline-none transition-all placeholder:text-slate-200 shadow-inner"
                       required
+                      autoFocus
                     />
                   </div>
                 </div>
 
                 {/* Category */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider">খাত (Category)</label>
-                  <select
-                    value={category}
-                    onChange={(e) => setCategory(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 px-4 focus:ring-2 focus:ring-slate-900 focus:border-transparent outline-none transition-all appearance-none"
-                    required
-                  >
-                    <option value="">নির্বাচন করুন</option>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">খাত বা বিষয়</label>
+                  <div className="grid grid-cols-3 gap-2">
                     {CATEGORIES[type].map(cat => (
-                      <option key={cat} value={cat}>{cat}</option>
+                      <button
+                        key={cat}
+                        type="button"
+                        onClick={() => setCategory(cat)}
+                        className={cn(
+                          "py-3 rounded-2xl text-[10px] font-bold transition-all border",
+                          category === cat 
+                            ? "bg-slate-900 text-white border-slate-900" 
+                            : "bg-slate-50 text-slate-500 border-slate-100 hover:border-slate-200"
+                        )}
+                      >
+                        {cat}
+                      </button>
                     ))}
-                  </select>
+                  </div>
                 </div>
 
                 {/* Note */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider">নোট (ঐচ্ছিক)</label>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">নোট (অপশনাল)</label>
                   <input 
                     type="text" 
                     value={note}
                     onChange={(e) => setNote(e.target.value)}
-                    placeholder="কিছু লিখে রাখুন..."
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 px-4 focus:ring-2 focus:ring-slate-900 focus:border-transparent outline-none transition-all"
+                    placeholder="নোট লিখে রাখুন..."
+                    className="w-full bg-slate-50 border border-slate-100 rounded-2xl py-4 px-6 outline-none focus:bg-white transition-all text-sm font-medium"
                   />
                 </div>
 
                 <button 
                   type="submit"
+                  disabled={!amount || !category}
                   className={cn(
-                    "w-full py-4 rounded-xl text-white font-bold shadow-lg transition-all active:scale-[0.98] mt-4",
-                    type === 'income' ? "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-200" : "bg-slate-900 hover:bg-slate-800 shadow-slate-200"
+                    "w-full py-5 rounded-[2rem] text-slate-950 font-black text-lg transition-all active:scale-[0.98] mt-4 flex items-center justify-center gap-3 disabled:opacity-30",
+                    type === 'income' ? "bg-emerald-500 shadow-xl shadow-emerald-500/20" : "bg-emerald-500 shadow-xl shadow-emerald-500/20"
                   )}
                 >
+                  <ArrowRight className="w-6 h-6" />
                   সেভ করুন
                 </button>
               </form>
@@ -680,6 +703,86 @@ export default function App() {
           </div>
         )}
       </AnimatePresence>
+
+      {/* --- HIDDEN REPORT COMPONENT FOR PDF CAPTURE --- */}
+      <div className="fixed left-[-9999px] top-[-9999px]">
+        <div 
+          ref={reportRef} 
+          className="bg-white w-[800px] p-20 text-slate-900 font-sans"
+          style={{ fontFeatureSettings: '"kern" 1, "liga" 1' }}
+        >
+          <div className="flex justify-between items-center mb-10 border-b-2 border-slate-900 pb-10">
+            <div>
+              <h1 className="text-4xl font-black mb-2">আমার পকেট</h1>
+              <p className="text-slate-500 font-bold uppercase tracking-widest text-sm">Amar Pocket Report</p>
+            </div>
+            <div className="text-right">
+              <p className="text-xs font-bold text-slate-400 uppercase">আপনার রিপোর্ট</p>
+              <p className="text-lg font-black text-slate-900">{exportDays === 'all' ? 'পূর্ণাঙ্গ রিপোর্ট' : `গত ${exportDays} দিনের ডাটা`}</p>
+              <p className="text-xs text-slate-400 mt-1">{format(new Date(), 'dd MMMM yyyy (hh:mm a)', { locale: bn })}</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-10 mb-10">
+            <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100">
+              <p className="text-[10px] font-black text-slate-400 uppercase mb-2">মোট ব্যালেন্স</p>
+              <p className="text-3xl font-black">৳{balance.toLocaleString('en-US')}</p>
+            </div>
+            <div className="bg-emerald-50 p-6 rounded-3xl border border-emerald-100">
+              <p className="text-[10px] font-black text-emerald-400 uppercase mb-2">মোট আয়</p>
+              <p className="text-3xl font-black text-emerald-600">৳{summary.income.toLocaleString('en-US')}</p>
+            </div>
+            <div className="bg-rose-50 p-6 rounded-3xl border border-rose-100">
+              <p className="text-[10px] font-black text-rose-400 uppercase mb-2">মোট ব্যয়</p>
+              <p className="text-3xl font-black text-rose-600">৳{summary.expense.toLocaleString('en-US')}</p>
+            </div>
+          </div>
+
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="border-b-2 border-slate-100">
+                <th className="py-5 text-xs font-black uppercase text-slate-400">তারিখ ও সময়</th>
+                <th className="py-5 text-xs font-black uppercase text-slate-400">খাত / বিষয়</th>
+                <th className="py-5 text-xs font-black uppercase text-slate-400">ধরন</th>
+                <th className="py-5 text-xs font-black uppercase text-slate-400 text-right">টাকা (৳)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(exportDays === 'all' ? transactions : transactions.filter(t => isAfter(new Date(t.date), subDays(new Date(), exportDays as number)))).map((tx) => (
+                <tr key={tx.id} className="border-b border-slate-50">
+                  <td className="py-5">
+                    <p className="font-bold text-sm">{format(new Date(tx.date), 'dd/MM/yyyy')}</p>
+                    <p className="text-[10px] text-slate-400">{tx.time}</p>
+                  </td>
+                  <td className="py-5">
+                    <p className="font-bold text-sm">{tx.category}</p>
+                    {tx.note && <p className="text-[10px] text-slate-400">{tx.note}</p>}
+                  </td>
+                  <td className="py-5">
+                    <span className={cn(
+                      "px-3 py-1 rounded-full text-[9px] font-black uppercase",
+                      tx.type === 'income' ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"
+                    )}>
+                      {tx.type === 'income' ? 'আয়' : 'ব্যয়'}
+                    </span>
+                  </td>
+                  <td className={cn(
+                    "py-5 text-right font-black text-lg",
+                    tx.type === 'income' ? "text-emerald-600" : "text-rose-600"
+                  )}>
+                    {tx.type === 'income' ? '+' : '-'} {tx.amount.toLocaleString('en-US')}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          <div className="mt-20 pt-10 border-t border-slate-200 text-center">
+            <p className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">Amar Pocket - Smart Finance Tracker</p>
+          </div>
+        </div>
+      </div>
+
     </div>
   );
 }
