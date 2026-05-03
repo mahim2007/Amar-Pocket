@@ -357,21 +357,21 @@ export default function App() {
   if (!user) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6 relative overflow-hidden">
-        {/* Background Accents (Subtle) */}
-        <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-emerald-500/5 blur-[120px] rounded-full" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-blue-500/5 blur-[100px] rounded-full" />
+        {/* Subtle Background Elements */}
+        <div className="absolute top-[-20%] left-[-10%] w-[60%] h-[60%] bg-emerald-500/5 blur-[120px] rounded-full" />
+        <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] bg-blue-500/5 blur-[100px] rounded-full" />
 
         <motion.div 
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="max-w-md w-full bg-white p-8 rounded-[2.5rem] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.06)] border border-slate-100 z-10"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="max-w-md w-full bg-white p-8 rounded-[3rem] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.08)] border border-slate-100 z-10 relative"
         >
           <div className="text-center mb-10">
-            <div className="bg-emerald-500 w-16 h-16 rounded-3xl flex items-center justify-center mx-auto mb-5 shadow-xl shadow-emerald-500/20 rotate-12">
+            <div className="bg-emerald-500 w-16 h-16 rounded-[2rem] flex items-center justify-center mx-auto mb-6 shadow-xl shadow-emerald-500/20 rotate-12 ring-4 ring-white">
               <Wallet className="w-8 h-8 text-white -rotate-12" />
             </div>
             <h1 className="text-3xl font-black text-slate-900 mb-2 tracking-tight">আমার পকেট</h1>
-            <p className="text-slate-400 text-sm font-medium">আপনার দৈনন্দিন পকেট ডায়েরি</p>
+            <p className="text-slate-400 text-xs font-bold uppercase tracking-widest leading-none">Smart Expense Tracker</p>
           </div>
 
           {/* Tab Switch */}
@@ -379,8 +379,8 @@ export default function App() {
             <button 
               onClick={() => { setAuthMode('login'); setAuthError(''); }}
               className={cn(
-                "flex-1 py-3 rounded-xl text-xs font-black transition-all",
-                authMode === 'login' ? "bg-white text-slate-950 shadow-md" : "text-slate-400 hover:text-slate-600 font-bold"
+                "flex-1 py-3.5 rounded-xl text-xs font-black transition-all",
+                authMode === 'login' ? "bg-white text-slate-950 shadow-md ring-1 ring-slate-100" : "text-slate-400 hover:text-slate-600 font-bold"
               )}
             >
               লগইন করুন
@@ -388,8 +388,8 @@ export default function App() {
             <button 
               onClick={() => { setAuthMode('signup'); setAuthError(''); }}
               className={cn(
-                "flex-1 py-3 rounded-xl text-xs font-black transition-all",
-                authMode === 'signup' ? "bg-white text-slate-950 shadow-md" : "text-slate-400 hover:text-slate-600 font-bold"
+                "flex-1 py-3.5 rounded-xl text-xs font-black transition-all",
+                authMode === 'signup' ? "bg-white text-slate-950 shadow-md ring-1 ring-slate-100" : "text-slate-400 hover:text-slate-600 font-bold"
               )}
             >
               নতুন অ্যাকাউন্ট
@@ -400,9 +400,10 @@ export default function App() {
             <AnimatePresence mode="wait">
               {authMode === 'signup' && (
                 <motion.div
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="overflow-hidden"
                 >
                   <div className="relative">
                     <UserIcon className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -411,7 +412,7 @@ export default function App() {
                       placeholder="আপনার পূর্ণ নাম"
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
-                      className="w-full pl-14 pr-6 py-4.5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-4 focus:ring-emerald-500/10 focus:bg-white text-slate-900 placeholder:text-slate-400 transition-all font-bold"
+                      className="w-full pl-14 pr-6 py-4.5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-4 focus:ring-emerald-500/10 focus:bg-white text-slate-900 placeholder:text-slate-400 transition-all font-black text-sm"
                       required
                     />
                   </div>
@@ -426,7 +427,7 @@ export default function App() {
                 placeholder="ইমেইল অ্যাড্রেস"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full pl-14 pr-6 py-4.5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-4 focus:ring-emerald-500/10 focus:bg-white text-slate-900 placeholder:text-slate-400 transition-all font-bold text-sm"
+                className="w-full pl-14 pr-6 py-4.5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-4 focus:ring-emerald-500/10 focus:bg-white text-slate-900 placeholder:text-slate-400 transition-all font-black text-sm"
                 required
               />
             </div>
@@ -438,16 +439,20 @@ export default function App() {
                 placeholder="পাসওয়ার্ড"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full pl-14 pr-6 py-4.5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-4 focus:ring-emerald-500/10 focus:bg-white text-slate-900 placeholder:text-slate-400 transition-all font-bold"
+                className="w-full pl-14 pr-6 py-4.5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-4 focus:ring-emerald-500/10 focus:bg-white text-slate-900 placeholder:text-slate-400 transition-all font-black"
                 required
                 minLength={6}
               />
             </div>
 
             {authError && (
-              <p className="text-rose-500 text-[11px] font-bold flex items-center gap-2 bg-rose-50 p-3 rounded-xl border border-rose-100">
-                <AlertCircle className="w-4 h-4" /> {authError}
-              </p>
+              <motion.p 
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="text-rose-500 text-[11px] font-black flex items-center gap-2 bg-rose-50 p-4 rounded-2xl border border-rose-100"
+              >
+                <AlertCircle className="w-4 h-4 shrink-0" /> {authError}
+              </motion.p>
             )}
 
             <button 
@@ -455,27 +460,29 @@ export default function App() {
               type="submit"
               className="w-full bg-slate-900 hover:bg-slate-800 text-white py-5 rounded-2xl font-black text-base transition-all active:scale-[0.98] shadow-xl shadow-slate-900/20 disabled:opacity-50"
             >
-              {authLoading ? <Loader2 className="w-6 h-6 animate-spin mx-auto" /> : (authMode === 'login' ? 'প্রবেশ করুন' : 'তৈরি করুন')}
+              {authLoading ? <Loader2 className="w-6 h-6 animate-spin mx-auto" /> : (authMode === 'login' ? 'অ্যাকাউন্টে প্রবেশ করুন' : 'অ্যাকাউন্ট তৈরি করুন')}
             </button>
           </form>
 
           <div className="relative mb-8">
             <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-100"></div></div>
-            <div className="relative flex justify-center text-[10px]"><span className="bg-white px-4 text-slate-400 font-black uppercase tracking-widest leading-none">অথবা</span></div>
+            <div className="relative flex justify-center text-[10px]"><span className="bg-white px-4 text-slate-400 font-black uppercase tracking-widest leading-none">অথবা সোশ্যাল লগইন</span></div>
           </div>
 
           <button 
             onClick={handleGoogleLogin}
             disabled={authLoading}
-            className="w-full flex items-center justify-center gap-3 bg-white border border-slate-100 text-slate-700 py-4 rounded-2xl font-black text-sm hover:bg-slate-50 transition-all active:scale-[0.98] shadow-sm"
+            className="w-full flex items-center justify-center gap-3 bg-white border-2 border-slate-100 text-slate-700 py-4.5 rounded-2xl font-black text-sm hover:bg-slate-50 hover:border-slate-200 transition-all active:scale-[0.98] shadow-sm group"
           >
-            <svg width="20" height="20" viewBox="0 0 24 24" className="flex-shrink-0">
-              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-              <path fill="#FBBC05" d="M5.84 14.1c-.22-.66-.35-1.36-.35-2.1s.13-1.44.35-2.1V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l3.66-2.84z"/>
-              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.66l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
-            </svg>
-            Google অ্যাকাউন্ট দিয়ে লগইন
+            <div className="bg-white p-1 rounded-lg">
+              <svg width="20" height="20" viewBox="0 0 24 24" className="flex-shrink-0">
+                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                <path fill="#FBBC05" d="M5.84 14.1c-.22-.66-.35-1.36-.35-2.1s.13-1.44.35-2.1V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l3.66-2.84z"/>
+                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.66l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+              </svg>
+            </div>
+            Google অ্যাকাউন্ট দিয়ে
           </button>
         </motion.div>
       </div>
