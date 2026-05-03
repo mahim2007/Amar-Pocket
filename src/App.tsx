@@ -406,35 +406,35 @@ export default function App() {
   return (
     <div className="min-h-screen bg-[#F0F2F5] text-slate-900 pb-32">
       {/* Premium Header */}
-      <div className="bg-slate-950 text-white pt-8 pb-32 px-6 rounded-b-[3rem] shadow-2xl relative overflow-hidden">
+      <div className="bg-slate-950 text-white pt-10 pb-20 px-6 rounded-b-[2.5rem] shadow-2xl relative overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/10 blur-[80px] rounded-full translate-x-1/2 -translate-y-1/2" />
         
         <div className="max-w-md mx-auto relative z-10">
-          <div className="flex justify-between items-center mb-8">
+          <div className="flex justify-between items-center mb-6">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-2xl overflow-hidden border-2 border-emerald-500 ring-4 ring-emerald-500/10 shadow-xl">
+              <div className="w-11 h-11 rounded-2xl overflow-hidden border-2 border-emerald-500 ring-4 ring-emerald-500/10 shadow-xl">
                  {user.photoURL ? (
                    <img src={user.photoURL} alt="User" referrerPolicy="no-referrer" />
                  ) : (
-                   <div className="w-full h-full bg-emerald-500 flex items-center justify-center text-white font-bold text-xl uppercase">
+                   <div className="w-full h-full bg-emerald-500 flex items-center justify-center text-white font-bold text-lg uppercase">
                      {user.displayName?.[0] || user.email?.[0]}
                    </div>
                  )}
               </div>
               <div>
-                <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-0.5">শুভেচ্ছা,</p>
-                <h2 className="font-bold text-lg truncate max-w-[150px]">{user.displayName?.split(' ')[0] || 'ইউজার'} 👋</h2>
+                <p className="text-slate-400 text-[9px] font-bold uppercase tracking-widest mb-0.5">শুভেচ্ছা,</p>
+                <h2 className="font-bold text-base truncate max-w-[150px]">{user.displayName?.split(' ')[0] || 'ইউজার'} 👋</h2>
               </div>
             </div>
-            <button onClick={handleLogout} className="p-2.5 bg-white/5 rounded-xl hover:bg-white/10 transition-all text-slate-300">
+            <button onClick={handleLogout} className="p-2 bg-white/5 rounded-xl hover:bg-white/10 transition-all text-slate-300">
                <LogOut className="w-5 h-5" />
             </button>
           </div>
 
-          <div className="text-center mb-4">
-            <p className="text-emerald-400 text-xs font-bold uppercase tracking-widest mb-2 opacity-80">আপনার বর্তমান ব্যালেন্স</p>
-            <h1 className="text-5xl font-black tracking-tight mb-2">
-              <span className="text-emerald-500 text-3xl mr-1">৳</span>
+          <div className="text-center">
+            <p className="text-emerald-400 text-[10px] font-bold uppercase tracking-widest mb-1 opacity-80">আপনার বর্তমান ব্যালেন্স</p>
+            <h1 className="text-4xl font-black tracking-tight">
+              <span className="text-emerald-500 text-2xl mr-1">৳</span>
               {balance.toLocaleString('en-US')}
             </h1>
           </div>
@@ -442,7 +442,7 @@ export default function App() {
       </div>
 
       {/* Stats Quick Cards */}
-      <div className="max-w-md mx-auto -mt-20 px-6 space-y-6">
+      <div className="max-w-md mx-auto -mt-12 px-6 space-y-6">
         <div className="grid grid-cols-2 gap-4">
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
