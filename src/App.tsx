@@ -53,6 +53,10 @@ import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   updateProfile,
+  sendEmailVerification,
+  reload,
+  signInWithRedirect,
+  getRedirectResult,
   collection, 
   addDoc, 
   query, 
@@ -108,6 +112,7 @@ export default function App() {
   const [fullName, setFullName] = useState('');
   const [authError, setAuthError] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
 
   // PDF Export State
   const reportRef = useRef<HTMLDivElement>(null);
@@ -140,7 +145,26 @@ export default function App() {
 
   // Handle Auth
   useEffect(() => {
+    const checkRedirect = async () => {
+      try {
+        const result = await getRedirectResult(auth);
+        if (result) {
+          // Success
+        }
+      } catch (error: any) {
+        console.error('Redirect Result Error:', error);
+        setAuthError(`লগইন ব্যর্থ: ${error.message}`);
+      }
+    };
+    checkRedirect();
+
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      if (currentUser && !currentUser.emailVerified && !currentUser.isAnonymous && currentUser.providerData[0]?.providerId === 'password') {
+        setIsVerifying(true);
+      } else {
+        setIsVerifying(false);
+      }
+      
       setUser(currentUser);
       if (currentUser) {
         setNewDisplayName(currentUser.displayName || '');
@@ -196,7 +220,21 @@ export default function App() {
     try {
       await signInWithPopup(auth, googleProvider);
     } catch (error: any) {
-      setAuthError('Google লগইন ব্যর্থ হয়েছে।');
+      console.error('Google Login Error:', error);
+      if (error.code === 'auth/popup-blocked') {
+        showDialog(
+          'পপআপ ব্লকড', 
+          'আপনার ব্রাউজারে পপআপ ব্লক করা আছে। আপনি কি অন্যভাবে (Redirect) চেষ্টা করতে চান?', 
+          'confirm',
+          () => signInWithRedirect(auth, googleProvider)
+        );
+      } else if (error.code === 'auth/cancelled-popup-request' || error.code === 'auth/popup-closed-by-user') {
+        // Silently handle
+      } else if (error.code === 'auth/operation-not-allowed') {
+        showDialog('সুবিধাটি বন্ধ', 'Firebase কনসোলে Google লগইন মেথডটি চালু করা হয়নি।', 'error');
+      } else {
+        showDialog('লগইন ব্যর্থ', `Google লগইন করা সম্ভব হয়নি। অথবা ব্রাউজারে Incognito মোড থাকায় সমস্যা হতে পারে।`, 'error');
+      }
     } finally {
       setAuthLoading(false);
     }
@@ -211,13 +249,41 @@ export default function App() {
       if (authMode === 'signup') {
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
         await updateProfile(userCredential.user, { displayName: fullName });
+        await sendEmailVerification(userCredential.user);
+        setIsVerifying(true);
+        showDialog('সফল', 'অ্যাকাউন্ট তৈরি হয়েছে! আপনার ইমেইল যাচাইয়ের জন্য একটি লিংক পাঠানো হয়েছে।', 'success');
       } else {
-        await signInWithEmailAndPassword(auth, email, password);
+        const userCredential = await signInWithEmailAndPassword(auth, email, password);
+        if (!userCredential.user.emailVerified) {
+          setIsVerifying(true);
+          await sendEmailVerification(userCredential.user);
+        }
       }
     } catch (error: any) {
+      console.error('Auth Error:', error);
       if (error.code === 'auth/email-already-in-use') setAuthError('এই ইমেইলটি ইতিপূর্বে ব্যবহার করা হয়েছে।');
-      else if (error.code === 'auth/wrong-password') setAuthError('পাসওয়ার্ড সঠিক নয়।');
+      else if (error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') setAuthError('পাসওয়ার্ড বা ইমেইল সঠিক নয়।');
+      else if (error.code === 'auth/too-many-requests') setAuthError('অতিরিক্ত চেষ্টার কারণে অ্যাকাউন্ট সাময়িকভাবে বন্ধ। পরে চেষ্টা করুন।');
       else setAuthError('লগইন ব্যর্থ হয়েছে। তথ্য যাচাই করুন।');
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const checkEmailVerificationStatus = async () => {
+    if (!auth.currentUser) return;
+    setAuthLoading(true);
+    try {
+      await reload(auth.currentUser);
+      if (auth.currentUser.emailVerified) {
+        setUser({ ...auth.currentUser });
+        setIsVerifying(false);
+        showDialog('সফল', 'ইমেইল সফলভাবে যাচাই করা হয়েছে!', 'success');
+      } else {
+        showDialog('অপেক্ষমান', 'আপনার ইমেইল এখনও যাচাই করা হয়নি। দয়া করে ইনবক্স চেক করুন।', 'alert');
+      }
+    } catch (error) {
+      console.error(error);
     } finally {
       setAuthLoading(false);
     }
@@ -254,8 +320,10 @@ export default function App() {
       setCategory('');
       setNote('');
       setIsAdding(false);
+      showDialog('সফল', 'হিসাব সফলভাবে যোগ করা হয়েছে।', 'success');
     } catch (error) {
-      handleFirestoreError(error, OperationType.CREATE, path);
+      console.error(error);
+      showDialog('ত্রুটি', 'হিসাব যোগ করা সম্ভব হয়নি। ইন্টারনেটে সমস্যা হতে পারে।', 'error');
     }
   };
 
@@ -269,7 +337,8 @@ export default function App() {
           await deleteDoc(doc(db, 'transactions', id));
           showDialog('সফল', 'রেকর্ডটি সফলভাবে মুছে ফেলা হয়েছে।', 'success');
         } catch (error) {
-          handleFirestoreError(error, OperationType.DELETE, `transactions/${id}`);
+          console.error(error);
+          showDialog('ত্রুটি', 'রেকর্ডটি মুছে ফেলা সম্ভব হয়নি।', 'error');
         }
       }
     );
@@ -474,16 +543,73 @@ export default function App() {
             disabled={authLoading}
             className="w-full flex items-center justify-center gap-3 bg-white border-2 border-slate-100 text-slate-700 py-4.5 rounded-2xl font-black text-sm hover:bg-slate-50 hover:border-slate-200 transition-all active:scale-[0.98] shadow-sm group"
           >
-            <div className="bg-white p-1 rounded-lg">
-              <svg width="20" height="20" viewBox="0 0 24 24" className="flex-shrink-0">
+            <div className="bg-slate-50 p-1.5 rounded-xl group-hover:bg-white transition-colors">
+              <svg width="18" height="18" viewBox="0 0 24 24" className="flex-shrink-0">
                 <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
                 <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
                 <path fill="#FBBC05" d="M5.84 14.1c-.22-.66-.35-1.36-.35-2.1s.13-1.44.35-2.1V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l3.66-2.84z"/>
                 <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.66l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
               </svg>
             </div>
-            Google অ্যাকাউন্ট দিয়ে
+            Google অ্যাকাউন্ট দিয়ে লগইন করুন
           </button>
+        </motion.div>
+      </div>
+    );
+  }
+
+  // --- Verification View ---
+  if (user && isVerifying) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6 relative overflow-hidden">
+        <div className="absolute top-[-20%] left-[-10%] w-[60%] h-[60%] bg-blue-500/5 blur-[120px] rounded-full" />
+        
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="max-w-md w-full bg-white p-10 rounded-[3rem] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.1)] text-center border border-slate-100 z-10 relative"
+        >
+          <div className="w-20 h-20 bg-blue-50 text-blue-500 rounded-[2.2rem] flex items-center justify-center mx-auto mb-8 shadow-sm ring-4 ring-white">
+            <Mail className="w-10 h-10" />
+          </div>
+          
+          <h2 className="text-2xl font-black text-slate-900 mb-4 tracking-tight">ইমেইল যাচাই করুন</h2>
+          <p className="text-slate-500 text-sm font-medium mb-10 leading-relaxed px-4">
+            আপনার <b>{user.email}</b> ঠিকানায় একটি ভেরিফিকেশন লিংক পাঠানো হয়েছে। দয়া করে ইনবক্স চেক করে লিংকে ক্লিক করুন।
+          </p>
+          
+          <div className="space-y-4">
+            <button 
+              onClick={checkEmailVerificationStatus}
+              disabled={authLoading}
+              className="w-full bg-slate-900 text-white py-5 rounded-2xl font-black text-sm shadow-xl shadow-slate-900/20 active:scale-[0.98] transition-all flex items-center justify-center gap-3"
+            >
+              {authLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <LogIn className="w-5 h-5" />}
+              লিংকে ক্লিক করেছি
+            </button>
+            
+            <button 
+              onClick={() => {
+                if (auth.currentUser) {
+                  sendEmailVerification(auth.currentUser);
+                  showDialog('সাফল্য', 'ভেরিফিকেশন ইমেইল পুনরায় পাঠানো হয়েছে।', 'success');
+                }
+              }}
+              className="w-full bg-slate-50 text-slate-500 py-4.5 rounded-2xl font-black text-xs hover:bg-slate-100 transition-all border border-slate-100"
+            >
+              ইমেইল আবার পাঠান
+            </button>
+            
+            <button 
+              onClick={() => {
+                signOut(auth);
+                setIsVerifying(false);
+              }}
+              className="w-full text-slate-400 font-bold text-xs pt-4 hover:text-slate-600 transition-colors"
+            >
+              অন্য অ্যাকাউন্ট ব্যবহার করুন
+            </button>
+          </div>
         </motion.div>
       </div>
     );

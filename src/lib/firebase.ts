@@ -8,7 +8,11 @@ import {
   User,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
-  updateProfile
+  updateProfile,
+  sendEmailVerification,
+  reload,
+  signInWithRedirect,
+  getRedirectResult
 } from 'firebase/auth';
 import { getFirestore, collection, addDoc, query, where, onSnapshot, doc, deleteDoc, orderBy, limit } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
@@ -62,6 +66,10 @@ export {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   updateProfile,
+  sendEmailVerification,
+  reload,
+  signInWithRedirect,
+  getRedirectResult,
   collection, 
   addDoc, 
   query, 
