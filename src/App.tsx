@@ -29,7 +29,10 @@ import {
   Settings,
   ChevronRight,
   PlusCircle,
-  ArrowRight
+  ArrowRight,
+  XCircle,
+  HelpCircle,
+  Info
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { format, subDays, isAfter } from 'date-fns';
@@ -108,13 +111,41 @@ export default function App() {
 
   // PDF Export State
   const reportRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [exportDays, setExportDays] = useState<number | 'all'>(7);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [newDisplayName, setNewDisplayName] = useState('');
+  const [newPhotoURL, setNewPhotoURL] = useState('');
+
+  // Custom UI Dialog State
+  const [dialog, setDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    type: 'confirm' | 'alert' | 'success' | 'error';
+    onConfirm?: () => void;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    type: 'alert'
+  });
+
+  const showDialog = (title: string, message: string, type: 'confirm' | 'alert' | 'success' | 'error', onConfirm?: () => void) => {
+    setDialog({ isOpen: true, title, message, type, onConfirm });
+  };
+
+  const closeDialog = () => setDialog(prev => ({ ...prev, isOpen: false }));
 
   // Handle Auth
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
+      if (currentUser) {
+        setNewDisplayName(currentUser.displayName || '');
+        setNewPhotoURL(currentUser.photoURL || '');
+      }
       setLoading(false);
     });
     return () => unsubscribe();
@@ -193,9 +224,12 @@ export default function App() {
   };
 
   const handleLogout = async () => {
-    if (window.confirm('আপনি কি লগ-আউট করতে চান?')) {
-      await signOut(auth);
-    }
+    showDialog(
+      'লগ-আউট নিশ্চিত করুন', 
+      'আপনি কি আপনার অ্যাকাউন্ট থেকে লগ-আউট করতে চান?', 
+      'confirm', 
+      () => signOut(auth)
+    );
   };
 
   // Transaction Actions
@@ -226,13 +260,53 @@ export default function App() {
   };
 
   const deleteTransaction = async (id: string) => {
-    if (window.confirm('মুছে ফেলতে চান?')) {
-      try {
-        await deleteDoc(doc(db, 'transactions', id));
-      } catch (error) {
-        handleFirestoreError(error, OperationType.DELETE, `transactions/${id}`);
+    showDialog(
+      'রেকর্ড মুছে ফেলুন',
+      'আপনি কি নিশ্চিতভাবে এই রেকর্ডটি মুছে ফেলতে চান?',
+      'confirm',
+      async () => {
+        try {
+          await deleteDoc(doc(db, 'transactions', id));
+          showDialog('সফল', 'রেকর্ডটি সফলভাবে মুছে ফেলা হয়েছে।', 'success');
+        } catch (error) {
+          handleFirestoreError(error, OperationType.DELETE, `transactions/${id}`);
+        }
       }
+    );
+  };
+
+  const handleUpdateProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) return;
+    setAuthLoading(true);
+    try {
+      await updateProfile(user, { 
+        displayName: newDisplayName.trim() || user.displayName,
+        photoURL: newPhotoURL.trim() || user.photoURL
+      });
+      setIsProfileOpen(false);
+      showDialog('সফল', 'প্রোফাইল সফলভাবে আপডেট হয়েছে!', 'success');
+    } catch (error) {
+      showDialog('ত্রুটি', 'আপডেট করা সম্ভব হয়নি। আবার চেষ্টা করুন।', 'error');
+    } finally {
+      setAuthLoading(false);
     }
+  };
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 2 * 1024 * 1024) {
+      showDialog('বড় ফাইল', 'ছবিটি ২ এমবি এর বেশি হতে পারবে না।', 'error');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setNewPhotoURL(reader.result as string);
+    };
+    reader.readAsDataURL(file);
   };
 
   // Improved PDF Export using html2canvas to support Bengali
@@ -246,23 +320,24 @@ export default function App() {
       if (!element) return;
 
       try {
+        // Optimized settings for smaller file size
         const canvas = await html2canvas(element, {
-          scale: 2,
+          scale: 1.2, // Further reduced for size optimization
           useCORS: true,
           logging: false,
           backgroundColor: '#ffffff'
         });
         
-        const imgData = canvas.toDataURL('image/png');
-        const pdf = new jsPDF('p', 'mm', 'a4');
+        const imgData = canvas.toDataURL('image/jpeg', 0.7); // Low quality for small MB size
+        const pdf = new jsPDF('p', 'mm', 'a4', true);
         const imgWidth = 210;
         const imgHeight = (canvas.height * imgWidth) / canvas.width;
         
-        pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
-        pdf.save(`amar_pocket_report_${days}.pdf`);
+        pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, imgHeight, undefined, 'FAST');
+        pdf.save(`pocket_report_${days}.pdf`);
       } catch (err) {
         console.error('PDF Export failed', err);
-        alert('পিডিএফ এক্সপোর্ট করা সম্ভব হচ্ছে না।');
+        showDialog('ত্রুটি', 'পিডিএফ এক্সপোর্ট করা সম্ভব হচ্ছে না।', 'error');
       } finally {
         setIsExporting(false);
       }
@@ -281,47 +356,47 @@ export default function App() {
   // --- Auth View ---
   if (!user) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-950 p-6 relative overflow-hidden">
-        {/* Background Accents */}
-        <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-emerald-500/20 blur-[120px] rounded-full" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-blue-500/10 blur-[100px] rounded-full" />
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6 relative overflow-hidden">
+        {/* Background Accents (Subtle) */}
+        <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-emerald-500/5 blur-[120px] rounded-full" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-blue-500/5 blur-[100px] rounded-full" />
 
         <motion.div 
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="max-w-md w-full backdrop-blur-xl bg-white/10 p-8 rounded-[2.5rem] shadow-2xl border border-white/10 z-10"
+          className="max-w-md w-full bg-white p-8 rounded-[2.5rem] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.06)] border border-slate-100 z-10"
         >
-          <div className="text-center mb-8">
-            <div className="bg-emerald-500 w-16 h-16 rounded-3xl flex items-center justify-center mx-auto mb-4 shadow-xl shadow-emerald-500/20 rotate-12">
+          <div className="text-center mb-10">
+            <div className="bg-emerald-500 w-16 h-16 rounded-3xl flex items-center justify-center mx-auto mb-5 shadow-xl shadow-emerald-500/20 rotate-12">
               <Wallet className="w-8 h-8 text-white -rotate-12" />
             </div>
-            <h1 className="text-3xl font-black text-white mb-2 tracking-tight">আমার পকেট</h1>
-            <p className="text-slate-400 text-sm">আপনার দৈনন্দিন পকেট ডায়েরি</p>
+            <h1 className="text-3xl font-black text-slate-900 mb-2 tracking-tight">আমার পকেট</h1>
+            <p className="text-slate-400 text-sm font-medium">আপনার দৈনন্দিন পকেট ডায়েরি</p>
           </div>
 
           {/* Tab Switch */}
-          <div className="flex bg-white/5 rounded-2xl p-1 mb-6">
+          <div className="flex bg-slate-50 rounded-2xl p-1.5 mb-8 border border-slate-100">
             <button 
               onClick={() => { setAuthMode('login'); setAuthError(''); }}
               className={cn(
-                "flex-1 py-2.5 rounded-xl text-sm font-bold transition-all",
-                authMode === 'login' ? "bg-white text-slate-900 shadow-lg" : "text-slate-400 hover:text-white"
+                "flex-1 py-3 rounded-xl text-xs font-black transition-all",
+                authMode === 'login' ? "bg-white text-slate-950 shadow-md" : "text-slate-400 hover:text-slate-600 font-bold"
               )}
             >
-              লগইন
+              লগইন করুন
             </button>
             <button 
               onClick={() => { setAuthMode('signup'); setAuthError(''); }}
               className={cn(
-                "flex-1 py-2.5 rounded-xl text-sm font-bold transition-all",
-                authMode === 'signup' ? "bg-white text-slate-900 shadow-lg" : "text-slate-400 hover:text-white"
+                "flex-1 py-3 rounded-xl text-xs font-black transition-all",
+                authMode === 'signup' ? "bg-white text-slate-950 shadow-md" : "text-slate-400 hover:text-slate-600 font-bold"
               )}
             >
-              সাইন আপ
+              নতুন অ্যাকাউন্ট
             </button>
           </div>
 
-          <form onSubmit={handleEmailAuth} className="space-y-4 mb-6">
+          <form onSubmit={handleEmailAuth} className="space-y-4 mb-8">
             <AnimatePresence mode="wait">
               {authMode === 'signup' && (
                 <motion.div
@@ -330,13 +405,13 @@ export default function App() {
                   exit={{ opacity: 0, y: -10 }}
                 >
                   <div className="relative">
-                    <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <UserIcon className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                     <input 
                       type="text" 
                       placeholder="আপনার পূর্ণ নাম"
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
-                      className="w-full pl-12 pr-4 py-4 bg-white/5 border border-white/10 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 text-white placeholder:text-slate-500 transition-all"
+                      className="w-full pl-14 pr-6 py-4.5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-4 focus:ring-emerald-500/10 focus:bg-white text-slate-900 placeholder:text-slate-400 transition-all font-bold"
                       required
                     />
                   </div>
@@ -345,57 +420,62 @@ export default function App() {
             </AnimatePresence>
 
             <div className="relative">
-              <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <Mail className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input 
                 type="email" 
                 placeholder="ইমেইল অ্যাড্রেস"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full pl-12 pr-4 py-4 bg-white/5 border border-white/10 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 text-white placeholder:text-slate-500 transition-all font-mono text-sm"
+                className="w-full pl-14 pr-6 py-4.5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-4 focus:ring-emerald-500/10 focus:bg-white text-slate-900 placeholder:text-slate-400 transition-all font-bold text-sm"
                 required
               />
             </div>
 
             <div className="relative">
-              <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <Lock className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input 
                 type="password" 
                 placeholder="পাসওয়ার্ড"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full pl-12 pr-4 py-4 bg-white/5 border border-white/10 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 text-white placeholder:text-slate-500 transition-all font-mono"
+                className="w-full pl-14 pr-6 py-4.5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-4 focus:ring-emerald-500/10 focus:bg-white text-slate-900 placeholder:text-slate-400 transition-all font-bold"
                 required
                 minLength={6}
               />
             </div>
 
             {authError && (
-              <p className="text-rose-400 text-xs font-medium flex items-center gap-1">
-                <AlertCircle className="w-3 h-3" /> {authError}
+              <p className="text-rose-500 text-[11px] font-bold flex items-center gap-2 bg-rose-50 p-3 rounded-xl border border-rose-100">
+                <AlertCircle className="w-4 h-4" /> {authError}
               </p>
             )}
 
             <button 
               disabled={authLoading}
               type="submit"
-              className="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 py-4 rounded-2xl font-black text-lg transition-all active:scale-[0.98] shadow-lg shadow-emerald-500/20 disabled:opacity-50"
+              className="w-full bg-slate-900 hover:bg-slate-800 text-white py-5 rounded-2xl font-black text-base transition-all active:scale-[0.98] shadow-xl shadow-slate-900/20 disabled:opacity-50"
             >
               {authLoading ? <Loader2 className="w-6 h-6 animate-spin mx-auto" /> : (authMode === 'login' ? 'প্রবেশ করুন' : 'তৈরি করুন')}
             </button>
           </form>
 
-          <div className="relative mb-6">
-            <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-white/10"></div></div>
-            <div className="relative flex justify-center text-xs"><span className="bg-[#0f172a] px-3 text-slate-500 font-bold">অথবা লগইন করুন</span></div>
+          <div className="relative mb-8">
+            <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-100"></div></div>
+            <div className="relative flex justify-center text-[10px]"><span className="bg-white px-4 text-slate-400 font-black uppercase tracking-widest leading-none">অথবা</span></div>
           </div>
 
           <button 
             onClick={handleGoogleLogin}
             disabled={authLoading}
-            className="w-full flex items-center justify-center gap-3 bg-white/5 border border-white/10 text-white py-4 rounded-2xl font-bold hover:bg-white/10 transition-all active:scale-[0.98]"
+            className="w-full flex items-center justify-center gap-3 bg-white border border-slate-100 text-slate-700 py-4 rounded-2xl font-black text-sm hover:bg-slate-50 transition-all active:scale-[0.98] shadow-sm"
           >
-            <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/pwa/google.svg" className="w-5 h-5 flex-shrink-0" alt="GMail" />
-            Google অ্যাকাউন্ট দিয়ে
+            <svg width="20" height="20" viewBox="0 0 24 24" className="flex-shrink-0">
+              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+              <path fill="#FBBC05" d="M5.84 14.1c-.22-.66-.35-1.36-.35-2.1s.13-1.44.35-2.1V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l3.66-2.84z"/>
+              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.66l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+            </svg>
+            Google অ্যাকাউন্ট দিয়ে লগইন
           </button>
         </motion.div>
       </div>
@@ -409,7 +489,10 @@ export default function App() {
       <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-lg border-b border-slate-100 px-6 py-4">
         <div className="max-w-md mx-auto flex justify-between items-center">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-emerald-500 overflow-hidden shadow-lg shadow-emerald-500/20 border-2 border-white">
+            <button 
+              onClick={() => setIsProfileOpen(true)}
+              className="w-10 h-10 rounded-2xl bg-emerald-500 overflow-hidden shadow-lg shadow-emerald-500/20 border-2 border-white active:scale-95 transition-all"
+            >
                {user.photoURL ? (
                  <img src={user.photoURL} alt="User" referrerPolicy="no-referrer" />
                ) : (
@@ -417,8 +500,8 @@ export default function App() {
                    {user.displayName?.[0] || user.email?.[0]}
                  </div>
                )}
-            </div>
-            <div>
+            </button>
+            <div onClick={() => setIsProfileOpen(true)} className="cursor-pointer">
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">শুভ দিন,</p>
               <h2 className="font-bold text-sm text-slate-800">{user.displayName?.split(' ')[0] || 'ইউজার'}</h2>
             </div>
@@ -477,6 +560,7 @@ export default function App() {
         <div className="overflow-x-auto no-scrollbar -mx-2 px-2">
           <div className="flex gap-3 pb-2">
             {[
+              { l: '১ দিন', d: 1 },
               { l: '৭ দিন', d: 7 },
               { l: '৩০ দিন', d: 30 },
               { l: 'আজীবন', d: 'all' }
@@ -653,17 +737,17 @@ export default function App() {
                 {/* Category */}
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">খাত বা বিষয়</label>
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-3 gap-3">
                     {CATEGORIES[type].map(cat => (
                       <button
                         key={cat}
                         type="button"
                         onClick={() => setCategory(cat)}
                         className={cn(
-                          "py-3 rounded-2xl text-[10px] font-bold transition-all border",
+                          "py-3.5 rounded-2xl text-[10px] font-black transition-all border-2",
                           category === cat 
-                            ? "bg-slate-900 text-white border-slate-900" 
-                            : "bg-slate-50 text-slate-500 border-slate-100 hover:border-slate-200"
+                            ? "bg-slate-900 text-white border-slate-900 shadow-lg shadow-slate-900/20" 
+                            : "bg-white text-slate-400 border-slate-100 hover:border-slate-200 hover:text-slate-600"
                         )}
                       >
                         {cat}
@@ -701,72 +785,236 @@ export default function App() {
         )}
       </AnimatePresence>
 
+      {/* --- PROFILE/SETTINGS MODAL --- */}
+      <AnimatePresence>
+        {isProfileOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsProfileOpen(false)}
+              className="absolute inset-0 bg-slate-950/80 backdrop-blur-md"
+            />
+            
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="relative w-full max-w-sm bg-white rounded-[3rem] p-8 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.1)] border border-slate-100 overflow-hidden"
+            >
+              <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-br from-emerald-400 to-emerald-600" />
+              
+              <div className="relative pt-8 text-center">
+                <input 
+                  type="file" 
+                  ref={fileInputRef} 
+                  className="hidden" 
+                  accept="image/*"
+                  onChange={handleImageUpload}
+                />
+                
+                <button 
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-24 h-24 rounded-[2rem] bg-emerald-500 border-4 border-white shadow-xl mx-auto mb-2 overflow-hidden relative group"
+                >
+                  {newPhotoURL ? (
+                    <img src={newPhotoURL} alt="User" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                  ) : user.photoURL ? (
+                    <img src={user.photoURL} alt="User" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-white font-black text-3xl uppercase">
+                      {user.displayName?.[0] || user.email?.[0]}
+                    </div>
+                  )}
+                  <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Plus className="w-8 h-8 text-white" />
+                  </div>
+                </button>
+                <p className="text-[9px] font-black text-emerald-500 uppercase tracking-widest mb-4">ছবি পরিবর্তন করুন</p>
+                
+                <h3 className="text-xl font-black text-slate-900 mb-1">{user.displayName || 'ইউজার'}</h3>
+                <p className="text-slate-400 text-xs font-medium mb-8">{user.email}</p>
+
+                <form onSubmit={handleUpdateProfile} className="space-y-4 text-left">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">আপনার নাম</label>
+                    <input 
+                      type="text" 
+                      value={newDisplayName}
+                      onChange={(e) => setNewDisplayName(e.target.value)}
+                      placeholder="নতুন নাম লিখুন"
+                      className="w-full bg-slate-50 border border-slate-100 rounded-2xl py-4 px-6 outline-none focus:bg-white focus:ring-4 focus:ring-emerald-500/10 transition-all font-bold text-slate-800"
+                      required
+                    />
+                  </div>
+
+                  <div className="pt-2 flex gap-3">
+                    <button 
+                      type="button"
+                      onClick={() => setIsProfileOpen(false)}
+                      className="flex-1 py-4 rounded-2xl bg-slate-100 text-slate-500 font-bold text-sm hover:bg-slate-200 transition-all"
+                    >
+                      বাতিল
+                    </button>
+                    <button 
+                      disabled={authLoading || (!newDisplayName.trim() && !newPhotoURL.trim()) || (newDisplayName === user.displayName && newPhotoURL === user.photoURL)}
+                      type="submit"
+                      className="flex-[2] bg-emerald-500 text-slate-950 py-4 rounded-2xl font-black text-sm shadow-lg shadow-emerald-500/20 active:scale-95 disabled:opacity-50 transition-all"
+                    >
+                      {authLoading ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : 'আপডেট করুন'}
+                    </button>
+                  </div>
+                </form>
+
+                <button 
+                  onClick={() => { setIsProfileOpen(false); handleLogout(); }}
+                  className="mt-8 text-rose-500 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 mx-auto hover:opacity-70 transition-all"
+                >
+                  <LogOut className="w-3 h-3" /> লগ-আউট করুন
+                </button>
+              </div>
+
+              <button 
+                onClick={() => setIsProfileOpen(false)}
+                className="absolute top-4 right-4 text-white/50 hover:text-white"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* --- CUSTOM DIALOG / ALERT --- */}
+      <AnimatePresence>
+        {dialog.isOpen && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-6">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={closeDialog}
+              className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative w-full max-w-[340px] bg-white rounded-[2.5rem] p-8 shadow-[0_32px_64px_-12px_rgba(0,0,0,0.12)] border border-slate-100 text-center"
+            >
+              <div className={cn(
+                "w-20 h-20 rounded-[1.8rem] flex items-center justify-center mx-auto mb-6 shadow-sm",
+                dialog.type === 'success' ? "bg-emerald-50 text-emerald-500" : 
+                dialog.type === 'error' ? "bg-rose-50 text-rose-500" :
+                dialog.type === 'confirm' ? "bg-blue-50 text-blue-500" : "bg-slate-50 text-slate-500"
+              )}>
+                {dialog.type === 'success' ? <PlusCircle className="w-10 h-10" /> : 
+                 dialog.type === 'error' ? <XCircle className="w-10 h-10" /> :
+                 dialog.type === 'confirm' ? <HelpCircle className="w-10 h-10" /> : <Info className="w-10 h-10" />}
+              </div>
+
+              <h3 className="text-xl font-black text-slate-900 mb-3 tracking-tight">{dialog.title}</h3>
+              <p className="text-slate-500 text-sm font-medium mb-8 leading-relaxed px-1">{dialog.message}</p>
+
+              <div className="flex gap-3">
+                {dialog.type === 'confirm' && (
+                  <button 
+                    onClick={closeDialog}
+                    className="flex-1 py-4.5 rounded-2xl bg-slate-50 text-slate-400 font-black text-xs hover:bg-slate-100 transition-all border border-slate-100"
+                  >
+                    না
+                  </button>
+                )}
+                <button 
+                  onClick={() => {
+                    if (dialog.onConfirm) dialog.onConfirm();
+                    closeDialog();
+                  }}
+                  className={cn(
+                    "flex-[1.5] py-4.5 rounded-2xl font-black text-xs shadow-lg transition-all active:scale-95",
+                    dialog.type === 'confirm' ? "bg-slate-900 text-white shadow-slate-900/10" : 
+                    dialog.type === 'error' ? "bg-rose-500 text-white shadow-rose-500/10" :
+                    "bg-emerald-500 text-slate-950 shadow-emerald-500/10"
+                  )}
+                >
+                  {dialog.type === 'confirm' ? 'হ্যাঁ, নিশ্চিত' : 'ঠিক আছে'}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* --- HIDDEN REPORT COMPONENT FOR PDF CAPTURE --- */}
       <div className="fixed left-[-9999px] top-[-9999px]">
         <div 
           ref={reportRef} 
-          className="bg-white w-[800px] p-20 text-slate-900 font-sans"
-          style={{ fontFeatureSettings: '"kern" 1, "liga" 1' }}
+          className="bg-white w-[800px] p-20 font-sans"
+          style={{ 
+            fontFeatureSettings: '"kern" 1, "liga" 1', 
+            backgroundColor: '#ffffff',
+            color: '#0f172a' 
+          }}
         >
-          <div className="flex justify-between items-center mb-10 border-b-2 border-slate-900 pb-10">
+          <div className="flex justify-between items-center mb-10 pb-10" style={{ borderBottom: '2px solid #0f172a' }}>
             <div>
-              <h1 className="text-4xl font-black mb-2">আমার পকেট</h1>
-              <p className="text-slate-500 font-bold uppercase tracking-widest text-sm">Amar Pocket Report</p>
+              <h1 className="text-4xl font-black mb-2" style={{ color: '#0f172a' }}>আমার পকেট</h1>
+              <p className="font-bold uppercase tracking-widest text-sm" style={{ color: '#64748b' }}>Amar Pocket Report</p>
             </div>
             <div className="text-right">
-              <p className="text-xs font-bold text-slate-400 uppercase">আপনার রিপোর্ট</p>
-              <p className="text-lg font-black text-slate-900">{exportDays === 'all' ? 'পূর্ণাঙ্গ রিপোর্ট' : `গত ${exportDays} দিনের ডাটা`}</p>
-              <p className="text-xs text-slate-400 mt-1">{format(new Date(), 'dd MMMM yyyy (hh:mm a)', { locale: bn })}</p>
+              <p className="text-xs font-bold uppercase" style={{ color: '#94a3b8' }}>আপনার রিপোর্ট</p>
+              <p className="text-lg font-black" style={{ color: '#0f172a' }}>{exportDays === 'all' ? 'পূর্ণাঙ্গ রিপোর্ট' : exportDays === 1 ? 'আজকের রিপোর্ট' : `গত ${exportDays} দিনের ডাটা`}</p>
+              <p className="text-xs mt-1" style={{ color: '#94a3b8' }}>{format(new Date(), 'dd MMMM yyyy (hh:mm a)', { locale: bn })}</p>
             </div>
           </div>
 
           <div className="grid grid-cols-3 gap-10 mb-10">
-            <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100">
-              <p className="text-[10px] font-black text-slate-400 uppercase mb-2">মোট ব্যালেন্স</p>
-              <p className="text-3xl font-black">৳{balance.toLocaleString('en-US')}</p>
+            <div className="p-6 rounded-3xl border" style={{ backgroundColor: '#f8fafc', borderColor: '#f1f5f9' }}>
+              <p className="text-[10px] font-black uppercase mb-2" style={{ color: '#94a3b8' }}>মোট ব্যালেন্স</p>
+              <p className="text-3xl font-black" style={{ color: '#0f172a' }}>৳{balance.toLocaleString('en-US')}</p>
             </div>
-            <div className="bg-emerald-50 p-6 rounded-3xl border border-emerald-100">
-              <p className="text-[10px] font-black text-emerald-400 uppercase mb-2">মোট আয়</p>
-              <p className="text-3xl font-black text-emerald-600">৳{summary.income.toLocaleString('en-US')}</p>
+            <div className="p-6 rounded-3xl border" style={{ backgroundColor: '#ecfdf5', borderColor: '#d1fae5' }}>
+              <p className="text-[10px] font-black uppercase mb-2" style={{ color: '#10b981' }}>মোট আয়</p>
+              <p className="text-3xl font-black" style={{ color: '#059669' }}>৳{summary.income.toLocaleString('en-US')}</p>
             </div>
-            <div className="bg-rose-50 p-6 rounded-3xl border border-rose-100">
-              <p className="text-[10px] font-black text-rose-400 uppercase mb-2">মোট ব্যয়</p>
-              <p className="text-3xl font-black text-rose-600">৳{summary.expense.toLocaleString('en-US')}</p>
+            <div className="p-6 rounded-3xl border" style={{ backgroundColor: '#fff1f2', borderColor: '#ffe4e6' }}>
+              <p className="text-[10px] font-black uppercase mb-2" style={{ color: '#f43f5e' }}>মোট ব্যয়</p>
+              <p className="text-3xl font-black" style={{ color: '#e11d48' }}>৳{summary.expense.toLocaleString('en-US')}</p>
             </div>
           </div>
 
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="border-b-2 border-slate-100">
-                <th className="py-5 text-xs font-black uppercase text-slate-400">তারিখ ও সময়</th>
-                <th className="py-5 text-xs font-black uppercase text-slate-400">খাত / বিষয়</th>
-                <th className="py-5 text-xs font-black uppercase text-slate-400">ধরন</th>
-                <th className="py-5 text-xs font-black uppercase text-slate-400 text-right">টাকা (৳)</th>
+              <tr style={{ borderBottom: '2px solid #f1f5f9' }}>
+                <th className="py-5 text-xs font-black uppercase" style={{ color: '#94a3b8' }}>তারিখ ও সময়</th>
+                <th className="py-5 text-xs font-black uppercase" style={{ color: '#94a3b8' }}>খাত / বিষয়</th>
+                <th className="py-5 text-xs font-black uppercase" style={{ color: '#94a3b8' }}>ধরন</th>
+                <th className="py-5 text-xs font-black uppercase text-right" style={{ color: '#94a3b8' }}>টাকা (৳)</th>
               </tr>
             </thead>
             <tbody>
               {(exportDays === 'all' ? transactions : transactions.filter(t => isAfter(new Date(t.date), subDays(new Date(), exportDays as number)))).map((tx) => (
-                <tr key={tx.id} className="border-b border-slate-50">
+                <tr key={tx.id} style={{ borderBottom: '1px solid #f8fafc' }}>
                   <td className="py-5">
-                    <p className="font-bold text-sm">{format(new Date(tx.date), 'dd/MM/yyyy')}</p>
-                    <p className="text-[10px] text-slate-400">{tx.time}</p>
+                    <p className="font-bold text-sm" style={{ color: '#0f172a' }}>{format(new Date(tx.date), 'dd/MM/yyyy')}</p>
+                    <p className="text-[10px]" style={{ color: '#94a3b8' }}>{tx.time}</p>
                   </td>
                   <td className="py-5">
-                    <p className="font-bold text-sm">{tx.category}</p>
-                    {tx.note && <p className="text-[10px] text-slate-400">{tx.note}</p>}
+                    <p className="font-bold text-sm" style={{ color: '#0f172a' }}>{tx.category}</p>
+                    {tx.note && <p className="text-[10px]" style={{ color: '#94a3b8' }}>{tx.note}</p>}
                   </td>
                   <td className="py-5">
-                    <span className={cn(
-                      "px-3 py-1 rounded-full text-[9px] font-black uppercase",
-                      tx.type === 'income' ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"
-                    )}>
+                    <span className="px-3 py-1 rounded-full text-[9px] font-black uppercase" style={{ 
+                      backgroundColor: tx.type === 'income' ? '#d1fae5' : '#ffe4e6',
+                      color: tx.type === 'income' ? '#065f46' : '#991b1b'
+                    }}>
                       {tx.type === 'income' ? 'আয়' : 'ব্যয়'}
                     </span>
                   </td>
-                  <td className={cn(
-                    "py-5 text-right font-black text-lg",
-                    tx.type === 'income' ? "text-emerald-600" : "text-rose-600"
-                  )}>
+                  <td className="py-5 text-right font-black text-lg" style={{ 
+                    color: tx.type === 'income' ? '#059669' : '#e11d48'
+                  }}>
                     {tx.type === 'income' ? '+' : '-'} {tx.amount.toLocaleString('en-US')}
                   </td>
                 </tr>
@@ -774,8 +1022,8 @@ export default function App() {
             </tbody>
           </table>
 
-          <div className="mt-20 pt-10 border-t border-slate-200 text-center">
-            <p className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">Amar Pocket - Smart Finance Tracker</p>
+          <div className="mt-20 pt-10 text-center" style={{ borderTop: '1px solid #e2e8f0' }}>
+            <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: '#cbd5e1' }}>Amar Pocket - Smart Finance Tracker</p>
           </div>
         </div>
       </div>
