@@ -19,7 +19,11 @@ import {
   X,
   LogOut,
   LogIn,
-  Loader2
+  Loader2,
+  Mail,
+  Lock,
+  User as UserIcon,
+  AlertCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { format, subDays, isAfter } from 'date-fns';
@@ -37,6 +41,9 @@ import {
   signInWithPopup, 
   signOut, 
   onAuthStateChanged, 
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  updateProfile,
   collection, 
   addDoc, 
   query, 
@@ -85,6 +92,14 @@ export default function App() {
   const [type, setType] = useState<TransactionType>('expense');
   const [note, setNote] = useState('');
 
+  // Auth UI state
+  const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [fullName, setFullName] = useState('');
+  const [authError, setAuthError] = useState('');
+  const [authLoading, setAuthLoading] = useState(false);
+
   // Handle Auth
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -132,12 +147,40 @@ export default function App() {
 
   const balance = summary.income - summary.expense;
 
-  // Actions
-  const handleLogin = async () => {
+  // Auth Actions
+  const handleGoogleLogin = async () => {
+    setAuthLoading(true);
+    setAuthError('');
     try {
       await signInWithPopup(auth, googleProvider);
-    } catch (error) {
-      console.error('Login failed', error);
+    } catch (error: any) {
+      console.error('Google Login failed', error);
+      setAuthError('Google লগইন ব্যর্থ হয়েছে। আবার চেষ্টা করুন।');
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleEmailAuth = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthLoading(true);
+    setAuthError('');
+
+    try {
+      if (authMode === 'signup') {
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        await updateProfile(userCredential.user, { displayName: fullName });
+      } else {
+        await signInWithEmailAndPassword(auth, email, password);
+      }
+    } catch (error: any) {
+      console.error('Email Auth failed', error);
+      if (error.code === 'auth/email-already-in-use') setAuthError('এই ইমেইলটি ইতিপূর্বে ব্যবহার করা হয়েছে।');
+      else if (error.code === 'auth/wrong-password') setAuthError('পাসওয়ার্ড সঠিক নয়।');
+      else if (error.code === 'auth/user-not-found') setAuthError('এই ইমেইলে কোনো অ্যাকাউন্ট পাওয়া যায়নি।');
+      else setAuthError('লগইন/সাইনআপ ব্যর্থ হয়েছে। দয়া করে তথ্যগুলো যাচাই করুন।');
+    } finally {
+      setAuthLoading(false);
     }
   };
 
@@ -149,6 +192,7 @@ export default function App() {
     }
   };
 
+  // Transaction Actions
   const addTransaction = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!amount || !category || !user) return;
@@ -200,8 +244,8 @@ export default function App() {
       : transactions.filter(t => isAfter(new Date(t.date), subDays(new Date(), days)));
 
     const title = days === 'all' 
-      ? 'পূর্ণাঙ্গ হিসাব রিপোর্ট' 
-      : `গত ${days} দিনের হিসাব রিপোর্ট`;
+      ? 'Full Hishab Report' 
+      : `Last ${days} Days Report`;
 
     doc.setFontSize(20);
     doc.text('Amar Pocket (আমার পকেট)', 14, 20);
@@ -233,9 +277,10 @@ export default function App() {
     doc.text(`Total Expense: ${totalExpense.toLocaleString('en-US')}`, 14, finalY + 7);
     doc.text(`Balance: ${(totalIncome - totalExpense).toLocaleString('en-US')}`, 14, finalY + 14);
 
-    doc.save(`hishab_report_${days}.pdf`);
+    doc.save(`amar_pocket_report_${days}.pdf`);
   };
 
+  // Render Logic
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
@@ -250,21 +295,110 @@ export default function App() {
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="max-w-md w-full bg-white p-8 rounded-3xl shadow-xl text-center"
+          className="max-w-md w-full bg-white p-8 rounded-3xl shadow-xl"
         >
-          <div className="bg-emerald-100 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6 text-emerald-600">
-            <Wallet className="w-10 h-10" />
+          <div className="bg-emerald-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6 text-emerald-600">
+            <Wallet className="w-8 h-8" />
           </div>
-          <h1 className="text-3xl font-bold text-slate-900 mb-2">আমার পকেট</h1>
-          <p className="text-slate-500 mb-8">আপনার দৈনন্দিন হিসাব সুরক্ষিত রাখতে লগইন করুন</p>
+          <h1 className="text-3xl font-bold text-slate-900 text-center mb-1">আমার পকেট</h1>
+          <p className="text-slate-500 text-center mb-8">সব হিসাব এখন আপনার হাতের মুঠোয়</p>
+
+          <form onSubmit={handleEmailAuth} className="space-y-4 mb-6">
+            <AnimatePresence mode="wait">
+              {authMode === 'signup' && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                >
+                  <div className="relative">
+                    <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <input 
+                      type="text" 
+                      placeholder="আপনার নাম"
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
+                      className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500 transition-all text-sm"
+                      required
+                    />
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            <div className="relative">
+              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input 
+                type="email" 
+                placeholder="ইমেইল অ্যাড্রেস"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500 transition-all text-sm"
+                required
+              />
+            </div>
+
+            <div className="relative">
+              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input 
+                type="password" 
+                placeholder="পাসওয়ার্ড"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500 transition-all text-sm"
+                required
+                minLength={6}
+              />
+            </div>
+
+            <AnimatePresence>
+              {authError && (
+                <motion.div 
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="flex items-center gap-2 p-3 bg-rose-50 text-rose-600 text-xs rounded-lg border border-rose-100"
+                >
+                  <AlertCircle className="w-4 h-4" />
+                  {authError}
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            <button 
+              disabled={authLoading}
+              type="submit"
+              className="w-full bg-emerald-600 text-white py-3 rounded-xl font-bold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100 flex items-center justify-center gap-2"
+            >
+              {authLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : (authMode === 'login' ? 'লগইন করুন' : 'অ্যাকাউন্ট তৈরি করুন')}
+            </button>
+          </form>
           
+          <div className="relative mb-6">
+            <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-100"></div></div>
+            <div className="relative flex justify-center text-xs"><span className="bg-white px-2 text-slate-400 uppercase">অথবা</span></div>
+          </div>
+
           <button 
-            onClick={handleLogin}
-            className="w-full flex items-center justify-center gap-3 bg-slate-900 text-white py-4 rounded-xl font-bold hover:bg-slate-800 transition-all shadow-lg active:scale-95"
+            disabled={authLoading}
+            onClick={handleGoogleLogin}
+            className="w-full flex items-center justify-center gap-3 bg-white border border-slate-200 text-slate-700 py-3 rounded-xl font-bold hover:bg-slate-50 transition-all active:scale-95 mb-6"
           >
-            <LogIn className="w-5 h-5" />
-            Google দিয়ে লগইন করুন
+            <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/pwa/google.svg" className="w-5 h-5" alt="Google" />
+            Google দিয়ে লগইন
           </button>
+
+          <p className="text-sm text-slate-500">
+            {authMode === 'login' ? "অ্যাকাউন্ট নেই? " : "ইতিমধ্যে অ্যাকাউন্ট আছে? "}
+            <button 
+              onClick={() => {
+                setAuthMode(authMode === 'login' ? 'signup' : 'login');
+                setAuthError('');
+              }}
+              className="text-emerald-600 font-bold hover:underline"
+            >
+              {authMode === 'login' ? "নতুন খুলুন" : "লগইন করুন"}
+            </button>
+          </p>
         </motion.div>
       </div>
     );
@@ -276,7 +410,13 @@ export default function App() {
       <header className="bg-slate-900 text-white p-6 rounded-b-3xl shadow-lg mb-6 sticky top-0 z-10">
         <div className="max-w-md mx-auto flex justify-between items-center">
           <div className="flex items-center gap-3">
-             {user.photoURL && <img src={user.photoURL} alt="Profile" className="w-10 h-10 rounded-full border-2 border-emerald-400" referrerPolicy="no-referrer" />}
+             {user.photoURL ? (
+               <img src={user.photoURL} alt="Profile" className="w-10 h-10 rounded-full border-2 border-emerald-400" referrerPolicy="no-referrer" />
+             ) : (
+               <div className="w-10 h-10 rounded-full bg-emerald-500 flex items-center justify-center font-bold text-white uppercase">
+                 {user.displayName?.[0] || user.email?.[0]}
+               </div>
+             )}
              <div>
                <h1 className="text-xl font-bold flex items-center gap-2">আমার পকেট</h1>
                <p className="text-slate-400 text-[10px] truncate max-w-[120px]">{user.displayName || user.email}</p>
