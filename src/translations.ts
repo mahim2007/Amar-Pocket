@@ -116,8 +116,15 @@ export const translations = {
     loginFailed: "লগইন ব্যর্থ: ",
     accountAlreadyRegistered: "এই অ্যাকাউন্টটি ইতিপূর্বে অন্যভাবে নিবন্ধিত হয়েছে।",
     addTransactionFailed: "হিসাব যোগ করা সম্ভব হয়নি। ইন্টারনেটে সমস্যা হতে পারে।",
+    deleteAccount: "অ্যাকাউন্ট মুছে ফেলুন",
+    deleteAccountConfirm: "অ্যাকাউন্ট ডিলিট নিশ্চিত করুন",
+    deleteAccountMessage: "আপনি কি নিশ্চিতভাবে আপনার অ্যাকাউন্টটি চিরতরে মুছে ফেলতে চান? আপনার সমস্ত তথ্য মুছে যাবে।",
+    deleteAccountVerifiedOnly: "অ্যাকাউন্ট মুছতে প্রথমে ইমেইল ভেরীফাই করা আবশ্যক।",
+    accountDeleted: "অ্যাকাউন্ট সফলভাবে মুছে ফেলা হয়েছে।",
+    accountDeleteFailed: "অ্যাকাউন্ট মুছে ফেলা সম্ভব হয়নি। দয়া করে আবার লগইন করে চেষ্টা করুন।",
     statementOfAccount: "হিসাবের বিবরণী",
-    pwaNote: "ইন্সটল অপশন পেতে অ্যাপটি নতুন ট্যাবে ওপেন করুন।"
+    pwaNote: "ইন্সটল অপশন পেতে অ্যাপটি নতুন ট্যাবে ওপেন করুন।",
+    preparing: "প্রস্তুত হচ্ছে..."
   },
   en: {
     appName: "Amar Pocket",
@@ -233,7 +240,14 @@ export const translations = {
     loginFailed: "Login failed: ",
     accountAlreadyRegistered: "This account is already registered using another method.",
     addTransactionFailed: "Transaction could not be added. Network issue.",
+    deleteAccount: "Delete Account",
+    deleteAccountConfirm: "Confirm Account Deletion",
+    deleteAccountMessage: "Are you sure you want to delete your account permanently? All your data will be lost.",
+    deleteAccountVerifiedOnly: "Email verification is required before deleting the account.",
+    accountDeleted: "Account deleted successfully.",
+    accountDeleteFailed: "Could not delete account. Please login again to verify your identity and try again.",
     statementOfAccount: "Statement of Account",
-    pwaNote: "Open in a new tab to see the install option."
+    pwaNote: "Open in a new tab to see the install option.",
+    preparing: "Preparing..."
   }
 };

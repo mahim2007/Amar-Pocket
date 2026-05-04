@@ -26,7 +26,8 @@ import {
   doc, 
   deleteDoc, 
   orderBy, 
-  limit 
+  limit,
+  getDocs 
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
@@ -97,6 +98,7 @@ export {
   doc, 
   deleteDoc, 
   orderBy, 
-  limit 
+  limit,
+  getDocs
 };
 export type { User };

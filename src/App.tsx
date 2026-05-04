@@ -31,8 +31,20 @@ import {
   PlusCircle,
   ArrowRight,
   XCircle,
+  Search,
   HelpCircle,
-  Info
+  Info,
+  Utensils,
+  Bus,
+  ShoppingCart,
+  Receipt,
+  ShoppingBag,
+  Stethoscope,
+  Briefcase,
+  Sparkles,
+  Gift,
+  MoreHorizontal,
+  Calendar
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { format, subDays, isAfter } from 'date-fns';
@@ -66,6 +78,7 @@ import {
   onSnapshot, 
   doc, 
   deleteDoc, 
+  getDocs,
   orderBy,
   handleFirestoreError,
   OperationType,
@@ -98,10 +111,26 @@ export default function App() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [isAdding, setIsAdding] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isDownloadingDaily, setIsDownloadingDaily] = useState(false);
   const [amount, setAmount] = useState('');
   const [category, setCategory] = useState('');
-  const [type, setType] = useState<TransactionType>('expense');
+  const [transactionDate, setTransactionDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [type, setType] = useState<TransactionType>('income');
   const [note, setNote] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedQuickCategory, setSelectedQuickCategory] = useState('');
+
+  const expenseCategories = ['খাবার', 'যাতায়াত', 'বাজার', 'বিল', 'কেনাকাটা', 'মেডিকেল', 'অন্যান্য'];
+  const incomeCategories = ['বেতন', 'বোনাস', 'উপহার', 'বিনিয়োগ', 'অন্যান্য'];
+  const quickCategories = type === 'expense' ? expenseCategories : incomeCategories;
+
+  const filteredTransactions = useMemo(() => {
+    return transactions.filter(tx => 
+      tx.category.toLowerCase().includes(searchQuery.toLowerCase()) || 
+      tx.note.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      tx.amount.toString().includes(searchQuery)
+    );
+  }, [transactions, searchQuery]);
 
   // Auth UI state
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
@@ -131,11 +160,49 @@ export default function App() {
   const t = translations[lang];
   const locale = lang === 'bn' ? bn : enUS;
 
+  const toggleAdd = () => {
+    if (isAdding) {
+      setIsAdding(false);
+    } else {
+      setAmount('');
+      setCategory('');
+      setNote('');
+      setTransactionDate(format(new Date(), 'yyyy-MM-dd'));
+      setType('income');
+      setIsAdding(true);
+    }
+  };
+
   useEffect(() => {
     localStorage.setItem('pocket_lang', lang);
   }, [lang]);
 
   const CATEGORIES = t.categories;
+
+  const categoryIcons: Record<string, React.ReactNode> = {
+    'খাবার': <Utensils className="w-4 h-4" />,
+    'Food': <Utensils className="w-4 h-4" />,
+    'যাতায়াত': <Bus className="w-4 h-4" />,
+    'Transport': <Bus className="w-4 h-4" />,
+    'বাজার': <ShoppingCart className="w-4 h-4" />,
+    'Groceries': <ShoppingCart className="w-4 h-4" />,
+    'বিল': <Receipt className="w-4 h-4" />,
+    'Bills': <Receipt className="w-4 h-4" />,
+    'কেনাকাটা': <ShoppingBag className="w-4 h-4" />,
+    'Shopping': <ShoppingBag className="w-4 h-4" />,
+    'মেডিকেল': <Stethoscope className="w-4 h-4" />,
+    'Medical': <Stethoscope className="w-4 h-4" />,
+    'বেতন': <Briefcase className="w-4 h-4" />,
+    'Salary': <Briefcase className="w-4 h-4" />,
+    'বোনাস': <Sparkles className="w-4 h-4" />,
+    'Bonus': <Sparkles className="w-4 h-4" />,
+    'উপহার': <Gift className="w-4 h-4" />,
+    'Gift': <Gift className="w-4 h-4" />,
+    'বিনিয়োগ': <TrendingUp className="w-4 h-4" />,
+    'Investment': <TrendingUp className="w-4 h-4" />,
+    'অন্যান্য': <MoreHorizontal className="w-4 h-4" />,
+    'Others': <MoreHorizontal className="w-4 h-4" />,
+  };
 
   // Custom UI Dialog State
   const [dialog, setDialog] = useState<{
@@ -287,6 +354,7 @@ export default function App() {
 
   const downloadDailyReportCard = async () => {
     if (!dailyReportRef.current) return;
+    setIsDownloadingDaily(true);
     try {
       const canvas = await html2canvas(dailyReportRef.current, {
         scale: 4, // Higher scale for better quality
@@ -301,6 +369,8 @@ export default function App() {
     } catch (error) {
       console.error('Download error:', error);
       showDialog(t.error, t.updateFailed, 'error');
+    } finally {
+      setIsDownloadingDaily(false);
     }
   };
 
@@ -397,6 +467,44 @@ export default function App() {
     );
   };
 
+  const handleDeleteAccount = async () => {
+    if (!user) return;
+
+    if (!user.emailVerified) {
+      showDialog(t.error, t.deleteAccountVerifiedOnly, 'error');
+      return;
+    }
+
+    showDialog(
+      t.deleteAccountConfirm,
+      t.deleteAccountMessage,
+      'confirm',
+      async () => {
+        try {
+          setAuthLoading(true);
+          // Delete transactions first
+          const q = query(collection(db, 'transactions'), where('userId', '==', user.uid));
+          const snapshot = await getDocs(q);
+          const deletions = snapshot.docs.map(d => deleteDoc(doc(db, 'transactions', d.id)));
+          await Promise.all(deletions);
+          
+          await user.delete();
+          showDialog(t.success, t.accountDeleted, 'success');
+        } catch (error: any) {
+          console.error('Account Delete Error:', error);
+          if (error.code === 'auth/requires-recent-login') {
+            showDialog(t.error, t.accountDeleteFailed, 'error');
+          } else {
+            showDialog(t.error, error.message, 'error');
+          }
+        } finally {
+          setAuthLoading(false);
+          setIsProfileOpen(false);
+        }
+      }
+    );
+  };
+
   // Transaction Actions
   const addTransaction = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -406,7 +514,13 @@ export default function App() {
     const txCategory = category;
     const txType = type;
     const txNote = note;
+    
+    // Parse the selected date and set current time
+    const selectedDate = new Date(transactionDate);
     const now = new Date();
+    selectedDate.setHours(now.getHours(), now.getMinutes(), now.getSeconds());
+    
+    const txDateIso = selectedDate.toISOString();
     const tempId = `temp-${Date.now()}`;
 
     // Optimistic Transaction Object
@@ -415,7 +529,7 @@ export default function App() {
       amount: txAmount,
       category: txCategory,
       type: txType,
-      date: now.toISOString(),
+      date: txDateIso,
       time: format(now, 'hh:mm a'),
       note: txNote,
       userId: user.uid,
@@ -430,6 +544,7 @@ export default function App() {
     setAmount('');
     setCategory('');
     setNote('');
+    setTransactionDate(format(new Date(), 'yyyy-MM-dd'));
 
     try {
       const path = 'transactions';
@@ -437,7 +552,7 @@ export default function App() {
         amount: txAmount,
         category: txCategory,
         type: txType,
-        date: now.toISOString(),
+        date: txDateIso,
         time: format(now, 'hh:mm a'),
         note: txNote,
         userId: user.uid,
@@ -854,8 +969,17 @@ export default function App() {
                 disabled={isExporting}
                 className="flex items-center gap-2 px-6 py-3 bg-white hover:bg-slate-900 hover:text-white rounded-2xl text-[10px] font-black transition-all border border-slate-100 shadow-sm whitespace-nowrap group disabled:opacity-50"
               >
-                {isExporting && exportDays === opt.d ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3 text-emerald-500 group-hover:text-white" />}
-                {opt.l} {t.report}
+                {isExporting && exportDays === opt.d ? (
+                  <>
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                    {t.preparing}
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-3 h-3 text-emerald-500 group-hover:text-white" />
+                    {opt.l} {t.report}
+                  </>
+                )}
               </button>
             ))}
           </div>
@@ -878,8 +1002,13 @@ export default function App() {
           <div className="relative group">
             <div 
               ref={dailyReportRef}
-              className="rounded-[2.5rem] p-8 relative overflow-hidden shadow-2xl border"
-              style={{ backgroundColor: '#ffffff', color: '#0f172a', borderColor: '#f1f5f9' }}
+              className="rounded-[2.5rem] p-8 relative overflow-hidden shadow-2xl border font-sans"
+              style={{ 
+                backgroundColor: '#ffffff', 
+                color: '#0f172a', 
+                borderColor: '#f1f5f9',
+                fontFamily: '"Hind Siliguri", sans-serif'
+              }}
             >
               {/* Decorative elements for the card */}
               <div className="absolute top-0 right-0 w-32 h-32 rounded-full -mr-16 -mt-16 blur-3xl opacity-40" style={{ backgroundColor: '#dcfce7' }} />
@@ -937,22 +1066,72 @@ export default function App() {
               </div>
             </div>
 
-            <button 
-              onClick={downloadDailyReportCard}
-              className="absolute -bottom-6 right-8 bg-emerald-500 text-slate-950 w-12 h-12 rounded-full shadow-2xl shadow-emerald-500/40 hover:scale-110 active:scale-95 transition-all flex items-center justify-center z-20 group border-4 border-white"
-              title={t.downloadImage}
-            >
-              <Download className="w-5 h-5" />
-            </button>
+            <div className="absolute -bottom-6 right-8 flex items-center gap-3">
+              {isDownloadingDaily && (
+                <div className="bg-slate-900 text-white text-[10px] font-black px-3 py-1 rounded-full shadow-lg animate-bounce">
+                  {t.preparing}
+                </div>
+              )}
+              <button 
+                onClick={downloadDailyReportCard}
+                disabled={isDownloadingDaily}
+                className="bg-emerald-500 text-slate-950 w-12 h-12 rounded-full shadow-2xl shadow-emerald-500/40 hover:scale-110 active:scale-95 transition-all flex items-center justify-center z-20 group border-4 border-white disabled:opacity-70 disabled:scale-100"
+                title={t.downloadImage}
+              >
+                {isDownloadingDaily ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <Download className="w-5 h-5" />
+                )}
+              </button>
+            </div>
+          </div>
+        </section>
+
+        {/* Today's Activity Summary - UX Enhancement */}
+        <section className="grid grid-cols-3 gap-3">
+          <div className="bg-white p-4 rounded-3xl border border-slate-100 shadow-sm">
+            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">{lang === 'bn' ? 'আজকের আয়' : 'In today'}</p>
+            <p className="text-sm font-black text-emerald-600">৳{dailySummary.income.toLocaleString()}</p>
+          </div>
+          <div className="bg-white p-4 rounded-3xl border border-slate-100 shadow-sm">
+            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">{lang === 'bn' ? 'আজকের ব্যয়' : 'Out today'}</p>
+            <p className="text-sm font-black text-rose-500">৳{dailySummary.expense.toLocaleString()}</p>
+          </div>
+          <div className="bg-white p-4 rounded-3xl border border-slate-100 shadow-sm">
+            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">{lang === 'bn' ? 'অবশিষ্ট' : 'Balance'}</p>
+            <p className="text-sm font-black text-slate-900">৳{dailyCash.toLocaleString()}</p>
           </div>
         </section>
 
         {/* Recent Transactions List */}
         <section className="space-y-4">
-          <div className="flex justify-between items-end px-1">
-            <h3 className="font-black text-lg text-slate-800 tracking-tight">{t.records}</h3>
-            <div className="flex items-center gap-1 bg-white px-3 py-1 rounded-full border border-slate-100 text-[9px] font-black text-slate-400 uppercase tracking-widest shadow-sm">
-               {t.recentInfo}
+          <div className="space-y-4">
+            <div className="flex justify-between items-end px-1">
+              <h3 className="font-black text-lg text-slate-800 tracking-tight">{t.records}</h3>
+              <div className="flex items-center gap-1 bg-white px-3 py-1 rounded-full border border-slate-100 text-[9px] font-black text-slate-400 uppercase tracking-widest shadow-sm">
+                 {filteredTransactions.length} {t.recentInfo}
+              </div>
+            </div>
+
+            {/* Search Bar - UX Improvement */}
+            <div className="relative group">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300 group-focus-within:text-emerald-500 transition-colors" />
+              <input 
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder={lang === 'bn' ? 'অনুসন্ধান করুন...' : 'Search...'}
+                className="w-full bg-white border border-slate-100 rounded-2xl py-3 pl-11 pr-4 text-xs font-bold text-slate-600 outline-none focus:ring-4 focus:ring-emerald-500/5 focus:border-emerald-500/20 transition-all shadow-sm"
+              />
+              {searchQuery && (
+                <button 
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center text-slate-300 hover:text-rose-500"
+                >
+                  <XCircle className="w-4 h-4" />
+                </button>
+              )}
             </div>
           </div>
 
@@ -973,22 +1152,36 @@ export default function App() {
                     </div>
                   ))}
                 </div>
-              ) : transactions.length === 0 ? (
+              ) : filteredTransactions.length === 0 ? (
                 <div className="py-20 text-center space-y-4">
                    <div className="w-20 h-20 bg-slate-50 rounded-[2.5rem] flex items-center justify-center mx-auto text-slate-200">
-                      <History className="w-8 h-8" />
+                      <Search className="w-8 h-8" />
                    </div>
-                   <p className="text-slate-400 font-bold text-xs uppercase tracking-widest">{t.noRecords}</p>
+                   <p className="text-slate-400 font-bold text-xs uppercase tracking-widest">{searchQuery ? (lang === 'bn' ? 'কিছু পাওয়া যায়নি' : 'No matches found') : t.noRecords}</p>
+                   {searchQuery && (
+                     <button 
+                       onClick={() => setSearchQuery('')}
+                       className="text-emerald-500 text-[10px] font-black uppercase tracking-widest hover:underline"
+                     >
+                       সব দেখুন
+                     </button>
+                   )}
                 </div>
               ) : (
-                transactions.map((tx, i) => (
-                  <motion.div
-                    key={tx.id}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: i * 0.05 }}
-                    className="bg-white p-5 rounded-[2rem] shadow-sm border border-slate-50 flex items-center justify-between group active:scale-[0.98] transition-all"
-                  >
+                <motion.div layout className="space-y-3">
+                  {filteredTransactions.map((tx, i) => (
+                    <motion.div
+                      key={tx.id}
+                      layout
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.9 }}
+                      transition={{ 
+                        opacity: { duration: 0.2 },
+                        layout: { type: 'spring', damping: 25, stiffness: 300 }
+                      }}
+                      className="bg-white p-5 rounded-[2rem] shadow-sm border border-slate-50 flex items-center justify-between group active:scale-[0.98] transition-all"
+                    >
                     <div className="flex items-center gap-4">
                       <div className={cn(
                         "w-12 h-12 rounded-[1.25rem] flex items-center justify-center shrink-0 shadow-sm",
@@ -1024,7 +1217,8 @@ export default function App() {
                       </button>
                     </div>
                   </motion.div>
-                ))
+                  ))}
+                </motion.div>
               )}
             </AnimatePresence>
           </div>
@@ -1034,7 +1228,7 @@ export default function App() {
       {/* Floating Action Button */}
       <div className="fixed bottom-10 right-6 z-50">
         <button 
-          onClick={() => setIsAdding(true)}
+          onClick={toggleAdd}
           className="w-16 h-16 flex items-center justify-center bg-slate-900 text-white rounded-full font-black shadow-[0_20px_50px_rgba(0,0,0,0.3)] active:scale-90 transition-all hover:bg-emerald-600 hover:shadow-emerald-500/30 group"
           title={t.addRecord}
         >
@@ -1050,7 +1244,7 @@ export default function App() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              onClick={() => setIsAdding(false)}
+              onClick={toggleAdd}
               className="fixed inset-0 bg-slate-950/80 backdrop-blur-md"
             />
             
@@ -1067,7 +1261,7 @@ export default function App() {
                   <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mt-1">{t.correctInfo}</p>
                 </div>
                 <button 
-                  onClick={() => setIsAdding(false)} 
+                  onClick={toggleAdd} 
                   className="w-10 h-10 flex items-center justify-center bg-slate-50 text-slate-400 rounded-full hover:bg-slate-100"
                 >
                   <X className="w-6 h-6" />
@@ -1079,62 +1273,112 @@ export default function App() {
                 <div className="flex p-1.5 bg-slate-100 rounded-2xl border border-slate-200">
                   <button
                     type="button"
-                    onClick={() => setType('expense')}
-                    className={cn(
-                      "flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-black transition-all",
-                      type === 'expense' ? "bg-white text-rose-600 shadow-xl border border-slate-100" : "text-slate-500"
-                    )}
-                  >
-                  <ArrowUpCircle className="w-4 h-4" /> {t.expense}
-                  </button>
-                  <button
-                    type="button"
                     onClick={() => setType('income')}
                     className={cn(
                       "flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-black transition-all",
                       type === 'income' ? "bg-white text-emerald-600 shadow-xl border border-slate-100" : "text-slate-500"
                     )}
                   >
-                    <ArrowDownCircle className="w-4 h-4" /> {t.income}
+                    <ArrowUpCircle className="w-4 h-4" /> {t.income}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setType('expense')}
+                    className={cn(
+                      "flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-black transition-all",
+                      type === 'expense' ? "bg-white text-rose-600 shadow-xl border border-slate-100" : "text-slate-500"
+                    )}
+                  >
+                    <ArrowDownCircle className="w-4 h-4" /> {t.expense}
                   </button>
                 </div>
 
-                {/* Amount */}
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">{t.amount}</label>
-                  <div className="relative">
-                    <span className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-300 text-2xl font-black">৳</span>
-                    <input 
-                      type="number" 
-                      value={amount}
-                      onChange={(e) => setAmount(e.target.value)}
-                      placeholder="0.00"
-                      className="w-full bg-slate-50 border border-slate-100 rounded-3xl py-6 pl-12 pr-6 text-3xl font-black text-slate-900 focus:bg-white focus:ring-4 focus:ring-emerald-500/10 outline-none transition-all placeholder:text-slate-200 shadow-inner"
-                      required
-                      autoFocus
-                    />
+                {/* Amount and Date */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">{t.amount}</label>
+                    <div className="relative group">
+                      <span className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300 text-xl font-black group-focus-within:text-emerald-500 transition-colors">৳</span>
+                      <input 
+                        type="number" 
+                        value={amount}
+                        onChange={(e) => setAmount(e.target.value)}
+                        placeholder="0"
+                        className="w-full bg-slate-50 border border-slate-100 rounded-2xl py-5 pl-10 pr-4 text-2xl font-black text-slate-900 focus:bg-white focus:ring-4 focus:ring-emerald-500/10 outline-none transition-all placeholder:text-slate-200 shadow-sm h-[72px]"
+                        required
+                        autoFocus
+                      />
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">{t.date || 'Date'}</label>
+                    <div className="relative group">
+                      <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300 group-focus-within:text-emerald-500 transition-colors pointer-events-none" />
+                      <input 
+                        type="date" 
+                        value={transactionDate}
+                        onChange={(e) => setTransactionDate(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-100 rounded-2xl py-5 pl-10 pr-4 text-xs font-black text-slate-900 focus:bg-white focus:ring-4 focus:ring-emerald-500/10 outline-none transition-all shadow-sm appearance-none h-[72px]"
+                        required
+                      />
+                    </div>
                   </div>
                 </div>
 
+                {/* Quick Amounts */}
+                <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+                  {[10, 50, 100, 500, 1000].map(val => (
+                    <button
+                      key={val}
+                      type="button"
+                      onClick={() => setAmount(val.toString())}
+                      className={cn(
+                        "shrink-0 px-4 py-2 bg-slate-50 border border-slate-100 rounded-full text-[10px] font-black transition-all active:scale-95",
+                        type === 'income' 
+                          ? "text-emerald-600 hover:bg-emerald-50 hover:border-emerald-200" 
+                          : "text-rose-600 hover:bg-rose-50 hover:border-rose-200"
+                      )}
+                    >
+                      {type === 'income' ? '+' : '-'}৳{val}
+                    </button>
+                  ))}
+                </div>
+
                 {/* Category */}
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">{t.categoryLabel}</label>
-                  <div className="grid grid-cols-3 gap-3">
-                    {CATEGORIES[type].map(cat => (
-                      <button
-                        key={cat}
-                        type="button"
-                        onClick={() => setCategory(cat)}
-                        className={cn(
-                          "py-3.5 rounded-2xl text-[10px] font-black transition-all border-2",
-                          category === cat 
-                            ? "bg-slate-900 text-white border-slate-900 shadow-lg shadow-slate-900/20" 
-                            : "bg-white text-slate-400 border-slate-100 hover:border-slate-200 hover:text-slate-600"
-                        )}
-                      >
-                        {cat}
-                      </button>
-                    ))}
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center px-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest font-sans">{t.categoryLabel}</label>
+                    {category && (
+                      <span className="text-[8px] font-black text-emerald-500 uppercase tracking-widest animate-pulse">
+                        {category} {lang === 'bn' ? 'নির্বাচিত' : 'Selected'}
+                      </span>
+                    )}
+                  </div>
+                  <div className="relative">
+                    <div className="grid grid-cols-3 gap-3">
+                      {CATEGORIES[type].map(cat => (
+                        <button
+                          key={cat}
+                          type="button"
+                          onClick={() => setCategory(cat)}
+                          className={cn(
+                            "flex flex-col items-center justify-center gap-2 py-4 rounded-2xl text-[10px] font-black transition-all border-2",
+                            category === cat 
+                              ? "bg-slate-900 text-white border-slate-900 shadow-xl shadow-slate-900/20 scale-105 z-10" 
+                              : "bg-white text-slate-400 border-slate-100 hover:border-slate-200 hover:text-slate-600 active:scale-95"
+                          )}
+                        >
+                          <div className={cn(
+                            "w-8 h-8 rounded-xl flex items-center justify-center transition-colors",
+                            category === cat ? "bg-white/10" : "bg-slate-50"
+                          )}>
+                            {categoryIcons[cat] || <MoreHorizontal className="w-4 h-4" />}
+                          </div>
+                          {cat}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
 
@@ -1294,9 +1538,16 @@ export default function App() {
  
                   <button 
                     onClick={() => { setIsProfileOpen(false); handleLogout(); }}
-                    className="w-full py-4 bg-rose-50 text-rose-600 rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-rose-100 transition-all"
+                    className="w-full py-4 bg-slate-50 text-slate-500 rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-slate-100 transition-all border border-slate-100"
                   >
                     <LogOut className="w-3 h-3" /> {t.logout}
+                  </button>
+
+                  <button 
+                    onClick={handleDeleteAccount}
+                    className="w-full py-4 bg-rose-50 text-rose-600 rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-rose-100 transition-all"
+                  >
+                    <Trash2 className="w-3 h-3" /> {t.deleteAccount}
                   </button>
                 </div>
               </div>
@@ -1380,7 +1631,8 @@ export default function App() {
           style={{ 
             fontFeatureSettings: '"kern" 1, "liga" 1', 
             backgroundColor: '#ffffff',
-            color: '#0f172a'
+            color: '#0f172a',
+            fontFamily: '"Hind Siliguri", sans-serif'
           }}
         >
           {/* Header Section */}
