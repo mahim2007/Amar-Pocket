@@ -92,7 +92,7 @@ interface Transaction {
 
 // --- Constants ---
 const CATEGORIES = {
-  income: ['বেতন', 'ব্যাবসা', 'বোনাস', 'উপহার', 'বিনিয়োগ', 'অন্যান্য'],
+  income: ['ব্যাবসা', 'বেতন', 'বোনাস', 'উপহার', 'বিনিয়োগ', 'অন্যান্য'],
   expense: ['খাবার', 'যাতায়াত', 'ব্যাবসা', 'বাজার', 'বিল', 'মেডিকেল', 'কেনাকাটা', 'বিনোদন', 'অন্যান্য']
 };
 
@@ -186,7 +186,10 @@ export default function App() {
         setNewDisplayName(currentUser.displayName || '');
         setNewPhotoURL(currentUser.photoURL || '');
       } else {
-        setLoading(false); // Only stop loading if no user (show Auth View)
+        // Reduced timeout for faster feel
+        setTimeout(() => {
+          if (isMounted) setLoading(false);
+        }, 100);
       }
     });
 
@@ -472,63 +475,61 @@ export default function App() {
     }, 500);
   };
 
-  // --- Loading Screen (Only for Initial Auth Check) ---
+  // --- Loading Screen ---
   if (loading && !user) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50">
         <div className="relative">
           <div className="w-16 h-16 border-4 border-slate-100 border-t-emerald-500 rounded-full animate-spin" />
-          <Wallet className="w-6 h-6 text-emerald-500 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+          <img src="/logo.png" alt="Logo" className="w-10 h-10 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" onError={(e) => (e.currentTarget.style.display='none')} />
         </div>
         <p className="mt-6 text-slate-400 font-bold text-[10px] uppercase tracking-widest animate-pulse">লোড হচ্ছে...</p>
       </div>
     );
   }
 
-  // --- Auth View ---
+  // --- Auth View (Premium Mobile Experience) ---
   if (!user) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6 relative overflow-hidden">
-        {/* Subtle Background Elements */}
-        <div className="absolute top-[-20%] left-[-10%] w-[60%] h-[60%] bg-emerald-500/5 blur-[120px] rounded-full" />
-        <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] bg-blue-500/5 blur-[100px] rounded-full" />
+        <div className="absolute top-[-10%] left-[-10%] w-[70%] h-[70%] bg-emerald-500/10 blur-[130px] rounded-full animate-pulse" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[60%] h-[60%] bg-blue-500/10 blur-[110px] rounded-full animate-pulse" style={{ animationDelay: '1s' }} />
 
         <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="max-w-md w-full bg-white p-8 rounded-[3rem] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.08)] border border-slate-100 z-10 relative"
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="max-w-md w-full bg-white/90 backdrop-blur-xl p-8 rounded-[3.5rem] shadow-[0_32px_80px_-20px_rgba(0,0,0,0.1)] border border-white z-10 relative"
         >
           <div className="text-center mb-10">
-            <div className="bg-emerald-500 w-16 h-16 rounded-[2rem] flex items-center justify-center mx-auto mb-6 shadow-xl shadow-emerald-500/20 rotate-12 ring-4 ring-white">
-              <Wallet className="w-8 h-8 text-white -rotate-12" />
+            <div className="bg-white w-20 h-20 rounded-[2.2rem] flex items-center justify-center mx-auto mb-5 shadow-2xl shadow-emerald-500/10 border-2 border-slate-50">
+              <img src="/logo.png" alt="Logo" className="w-14 h-14 object-contain" onError={(e) => (e.currentTarget.style.display='none')} />
             </div>
-            <h1 className="text-3xl font-black text-slate-900 mb-2 tracking-tight">আমার পকেট</h1>
-            <p className="text-slate-400 text-xs font-bold uppercase tracking-widest leading-none">Smart Expense Tracker</p>
+            <h1 className="text-3xl font-black text-slate-900 mb-1 tracking-tight">আমার পকেট</h1>
+            <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em] leading-none">Smart Expense Tracker</p>
           </div>
 
-          {/* Tab Switch */}
-          <div className="flex bg-slate-50 rounded-2xl p-1.5 mb-8 border border-slate-100">
+          <div className="flex bg-slate-100/50 rounded-2xl p-1.5 mb-8 border border-slate-100 shadow-inner">
             <button 
               onClick={() => { setAuthMode('login'); setAuthError(''); }}
               className={cn(
-                "flex-1 py-3.5 rounded-xl text-xs font-black transition-all",
-                authMode === 'login' ? "bg-white text-slate-950 shadow-md ring-1 ring-slate-100" : "text-slate-400 hover:text-slate-600 font-bold"
+                "flex-1 py-4 rounded-xl text-sm font-black transition-all duration-300",
+                authMode === 'login' ? "bg-white text-emerald-600 shadow-sm" : "text-slate-400 hover:text-slate-600 font-bold"
               )}
             >
-              লগইন করুন
+              প্রবেশ
             </button>
             <button 
               onClick={() => { setAuthMode('signup'); setAuthError(''); }}
               className={cn(
-                "flex-1 py-3.5 rounded-xl text-xs font-black transition-all",
-                authMode === 'signup' ? "bg-white text-slate-950 shadow-md ring-1 ring-slate-100" : "text-slate-400 hover:text-slate-600 font-bold"
+                "flex-1 py-4 rounded-xl text-sm font-black transition-all duration-300",
+                authMode === 'signup' ? "bg-white text-emerald-600 shadow-sm" : "text-slate-400 hover:text-slate-600 font-bold"
               )}
             >
-              নতুন অ্যাকাউন্ট
+              নিবন্ধন
             </button>
           </div>
 
-          <form onSubmit={handleEmailAuth} className="space-y-4 mb-8">
+          <form onSubmit={handleEmailAuth} className="space-y-4 mb-4">
             <AnimatePresence mode="wait">
               {authMode === 'signup' && (
                 <motion.div
@@ -537,14 +538,14 @@ export default function App() {
                   exit={{ opacity: 0, height: 0 }}
                   className="overflow-hidden"
                 >
-                  <div className="relative">
-                    <UserIcon className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <div className="relative group">
+                    <UserIcon className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-emerald-500 transition-colors" />
                     <input 
                       type="text" 
-                      placeholder="আপনার পূর্ণ নাম"
+                      placeholder="আপনার নাম"
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
-                      className="w-full pl-14 pr-6 py-4.5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-4 focus:ring-emerald-500/10 focus:bg-white text-slate-900 placeholder:text-slate-400 transition-all font-black text-sm"
+                      className="w-full pl-14 pr-6 py-5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-4 focus:ring-emerald-500/10 focus:bg-white text-slate-900 placeholder:text-slate-400 transition-all font-bold text-base"
                       required
                     />
                   </div>
@@ -552,26 +553,26 @@ export default function App() {
               )}
             </AnimatePresence>
 
-            <div className="relative">
-              <Mail className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <div className="relative group">
+              <Mail className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-emerald-500 transition-colors" />
               <input 
                 type="email" 
                 placeholder="ইমেইল অ্যাড্রেস"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full pl-14 pr-6 py-4.5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-4 focus:ring-emerald-500/10 focus:bg-white text-slate-900 placeholder:text-slate-400 transition-all font-black text-sm"
+                className="w-full pl-14 pr-6 py-5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-4 focus:ring-emerald-500/10 focus:bg-white text-slate-900 placeholder:text-slate-400 transition-all font-bold text-base"
                 required
               />
             </div>
 
-            <div className="relative">
-              <Lock className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <div className="relative group">
+              <Lock className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-emerald-500 transition-colors" />
               <input 
                 type="password" 
                 placeholder="পাসওয়ার্ড"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full pl-14 pr-6 py-4.5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-4 focus:ring-emerald-500/10 focus:bg-white text-slate-900 placeholder:text-slate-400 transition-all font-black"
+                className="w-full pl-14 pr-6 py-5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-4 focus:ring-emerald-500/10 focus:bg-white text-slate-900 placeholder:text-slate-400 transition-all font-bold text-base"
                 required
                 minLength={6}
               />
@@ -581,40 +582,38 @@ export default function App() {
               <motion.p 
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="text-rose-500 text-[11px] font-black flex items-center gap-2 bg-rose-50 p-4 rounded-2xl border border-rose-100"
+                className="text-rose-500 text-[12px] font-bold flex items-center gap-3 bg-rose-50 p-4 rounded-2xl border border-rose-100"
               >
-                <AlertCircle className="w-4 h-4 shrink-0" /> {authError}
+                <AlertCircle className="w-5 h-5 shrink-0" /> {authError}
               </motion.p>
             )}
 
             <button 
               disabled={authLoading}
               type="submit"
-              className="w-full bg-slate-900 hover:bg-slate-800 text-white py-5 rounded-2xl font-black text-base transition-all active:scale-[0.98] shadow-xl shadow-slate-900/20 disabled:opacity-50"
+              className="w-full bg-emerald-500 hover:bg-emerald-600 text-white py-5 rounded-2xl font-black text-lg transition-all active:scale-[0.98] shadow-xl shadow-emerald-500/20 disabled:opacity-50 mt-2"
             >
-              {authLoading ? <Loader2 className="w-6 h-6 animate-spin mx-auto" /> : (authMode === 'login' ? 'অ্যাকাউন্টে প্রবেশ করুন' : 'অ্যাকাউন্ট তৈরি করুন')}
+              {authLoading ? <Loader2 className="w-6 h-6 animate-spin mx-auto" /> : (authMode === 'login' ? 'শুরু করুন' : 'নিবন্ধন করুন')}
             </button>
           </form>
 
-          <div className="relative mb-8">
+          <div className="relative mb-6">
             <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-100"></div></div>
-            <div className="relative flex justify-center text-[10px]"><span className="bg-white px-4 text-slate-400 font-black uppercase tracking-widest leading-none">অথবা সোশ্যাল লগইন</span></div>
+            <div className="relative flex justify-center text-[10px]"><span className="bg-white px-4 text-slate-300 font-black uppercase tracking-[0.2em] leading-none">অথবা সোশ্যাল</span></div>
           </div>
 
           <button 
             onClick={handleGoogleLogin}
             disabled={authLoading}
-            className="w-full flex items-center justify-center gap-3 bg-white border-2 border-slate-100 text-slate-700 py-4.5 rounded-2xl font-black text-sm hover:bg-slate-50 hover:border-slate-200 transition-all active:scale-[0.98] shadow-sm group"
+            className="w-full flex items-center justify-center gap-3 bg-white border-2 border-slate-100 text-slate-600 py-5 rounded-2xl font-black text-sm hover:border-emerald-500/50 hover:text-emerald-600 hover:bg-emerald-50 transition-all active:scale-[0.98] shadow-sm group"
           >
-            <div className="bg-slate-50 p-1.5 rounded-xl group-hover:bg-white transition-colors">
-              <svg width="18" height="18" viewBox="0 0 24 24" className="flex-shrink-0">
-                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                <path fill="#FBBC05" d="M5.84 14.1c-.22-.66-.35-1.36-.35-2.1s.13-1.44.35-2.1V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l3.66-2.84z"/>
-                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.66l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
-              </svg>
-            </div>
-            Google অ্যাকাউন্ট দিয়ে লগইন করুন
+            <svg width="20" height="20" viewBox="0 0 24 24" className="flex-shrink-0">
+              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+              <path fill="#FBBC05" d="M5.84 14.1c-.22-.66-.35-1.36-.35-2.1s.13-1.44.35-2.1V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l3.66-2.84z"/>
+              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.66l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.47 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+            </svg>
+            Google অ্যাকাউন্ট দিয়ে লগইন
           </button>
         </motion.div>
       </div>
@@ -813,8 +812,8 @@ export default function App() {
                   ))}
                 </div>
               ) : transactions.length === 0 ? (
-                <div className="text-center py-20 bg-white rounded-[2.5rem] border border-dashed border-slate-200">
-                   <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-200">
+                <div className="py-20 text-center space-y-4">
+                   <div className="w-20 h-20 bg-slate-50 rounded-[2.5rem] flex items-center justify-center mx-auto text-slate-200">
                       <History className="w-8 h-8" />
                    </div>
                    <p className="text-slate-400 font-bold text-xs uppercase tracking-widest">রেকর্ড পাওয়া যায়নি</p>
@@ -884,13 +883,13 @@ export default function App() {
       {/* --- ADD MODAL --- */}
       <AnimatePresence>
         {isAdding && (
-          <div className="fixed inset-0 z-[100] flex items-end justify-center p-0 md:p-6 md:items-center">
+          <div className="fixed inset-0 z-[100] flex items-end justify-center p-0 md:p-6 md:items-center overflow-y-auto no-scrollbar py-10 md:py-0">
             <motion.div 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsAdding(false)}
-              className="absolute inset-0 bg-slate-950/80 backdrop-blur-md"
+              className="fixed inset-0 bg-slate-950/80 backdrop-blur-md"
             />
             
             <motion.div
@@ -898,7 +897,7 @@ export default function App() {
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
               transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-              className="relative w-full max-w-md bg-white rounded-t-[3rem] md:rounded-[3rem] p-8 shadow-2xl"
+              className="relative w-full max-w-md bg-white rounded-t-[3rem] md:rounded-[3rem] p-8 shadow-2xl max-h-[92vh] overflow-y-auto no-scrollbar"
             >
               <div className="flex justify-between items-center mb-8">
                 <div>
@@ -957,7 +956,7 @@ export default function App() {
 
                 {/* Category */}
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">খাত বা বিষয়</label>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">খাতা বা বিষয়</label>
                   <div className="grid grid-cols-3 gap-3">
                     {CATEGORIES[type].map(cat => (
                       <button
@@ -994,7 +993,7 @@ export default function App() {
                   disabled={!amount || !category || isSaving}
                   className={cn(
                     "w-full py-5 rounded-[2rem] text-slate-950 font-black text-lg transition-all active:scale-[0.98] mt-4 flex items-center justify-center gap-3 disabled:opacity-50",
-                    type === 'income' ? "bg-emerald-500 shadow-xl shadow-emerald-500/20" : "bg-emerald-500 shadow-xl shadow-emerald-500/20"
+                    "bg-emerald-500 shadow-xl shadow-emerald-500/20"
                   )}
                 >
                   {isSaving ? <Loader2 className="w-6 h-6 animate-spin" /> : <ArrowRight className="w-6 h-6" />}
@@ -1009,20 +1008,20 @@ export default function App() {
       {/* --- PROFILE/SETTINGS MODAL --- */}
       <AnimatePresence>
         {isProfileOpen && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 overflow-y-auto no-scrollbar py-20">
             <motion.div 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsProfileOpen(false)}
-              className="absolute inset-0 bg-slate-950/80 backdrop-blur-md"
+              className="fixed inset-0 bg-slate-950/80 backdrop-blur-md"
             />
             
             <motion.div
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.9 }}
-              className="relative w-full max-w-sm bg-white rounded-[3rem] p-8 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.1)] border border-slate-100 overflow-hidden"
+              className="relative w-full max-w-sm bg-white rounded-[3rem] p-8 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.1)] border border-slate-100 overflow-hidden max-h-[90vh] overflow-y-auto no-scrollbar"
             >
               <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-br from-emerald-400 to-emerald-600" />
               

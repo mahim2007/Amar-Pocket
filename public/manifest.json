@@ -3,12 +3,12 @@
   "name": "আমার পকেট (Amar Pocket)",
   "icons": [
     {
-      "src": "https://img.icons8.com/color/512/wallet.png",
+      "src": "/logo.png",
       "type": "image/png",
       "sizes": "192x192"
     },
     {
-      "src": "https://img.icons8.com/color/512/wallet.png",
+      "src": "/logo.png",
       "type": "image/png",
       "sizes": "512x512"
     }
