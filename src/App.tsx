@@ -451,21 +451,22 @@ export default function App() {
       if (!element) return;
 
       try {
-        // Optimized settings for smaller file size
+        // Higher scale for 2x clarity, but keeping it reasonable for file size
         const canvas = await html2canvas(element, {
-          scale: 1.2, // Further reduced for size optimization
+          scale: 2, 
           useCORS: true,
           logging: false,
           backgroundColor: '#ffffff'
         });
         
-        const imgData = canvas.toDataURL('image/jpeg', 0.7); // Low quality for small MB size
+        // Use 0.8 quality for crisp text with decent compression
+        const imgData = canvas.toDataURL('image/jpeg', 0.8); 
         const pdf = new jsPDF('p', 'mm', 'a4', true);
         const imgWidth = 210;
         const imgHeight = (canvas.height * imgWidth) / canvas.width;
         
         pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, imgHeight, undefined, 'FAST');
-        pdf.save(`pocket_report_${days}.pdf`);
+        pdf.save(`${user?.displayName || 'pocket'}_statement_${days === 'all' ? 'total' : days + 'days'}.pdf`);
       } catch (err) {
         console.error('PDF Export failed', err);
         showDialog('ত্রুটি', 'পিডিএফ এক্সপোর্ট করা সম্ভব হচ্ছে না।', 'error');
@@ -1170,80 +1171,136 @@ export default function App() {
       <div className="fixed left-[-9999px] top-[-9999px]">
         <div 
           ref={reportRef} 
-          className="bg-white w-[800px] p-20 font-sans"
+          className="bg-white w-[1000px] p-24 font-sans"
           style={{ 
             fontFeatureSettings: '"kern" 1, "liga" 1', 
             backgroundColor: '#ffffff',
-            color: '#0f172a' 
+            color: '#0f172a'
           }}
         >
-          <div className="flex justify-between items-center mb-10 pb-10" style={{ borderBottom: '2px solid #0f172a' }}>
-            <div>
-              <h1 className="text-4xl font-black mb-2" style={{ color: '#0f172a' }}>আমার পকেট</h1>
-              <p className="font-bold uppercase tracking-widest text-sm" style={{ color: '#64748b' }}>Amar Pocket Report</p>
-            </div>
-            <div className="text-right">
-              <p className="text-xs font-bold uppercase" style={{ color: '#94a3b8' }}>আপনার রিপোর্ট</p>
-              <p className="text-lg font-black" style={{ color: '#0f172a' }}>{exportDays === 'all' ? 'পূর্ণাঙ্গ রিপোর্ট' : exportDays === 1 ? 'আজকের রিপোর্ট' : `গত ${exportDays} দিনের ডাটা`}</p>
-              <p className="text-xs mt-1" style={{ color: '#94a3b8' }}>{format(new Date(), 'dd MMMM yyyy (hh:mm a)', { locale: bn })}</p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-3 gap-10 mb-10">
-            <div className="p-6 rounded-3xl border" style={{ backgroundColor: '#f8fafc', borderColor: '#f1f5f9' }}>
-              <p className="text-[10px] font-black uppercase mb-2" style={{ color: '#94a3b8' }}>মোট ব্যালেন্স</p>
-              <p className="text-3xl font-black" style={{ color: '#0f172a' }}>৳{balance.toLocaleString('en-US')}</p>
-            </div>
-            <div className="p-6 rounded-3xl border" style={{ backgroundColor: '#ecfdf5', borderColor: '#d1fae5' }}>
-              <p className="text-[10px] font-black uppercase mb-2" style={{ color: '#10b981' }}>মোট আয়</p>
-              <p className="text-3xl font-black" style={{ color: '#059669' }}>৳{summary.income.toLocaleString('en-US')}</p>
-            </div>
-            <div className="p-6 rounded-3xl border" style={{ backgroundColor: '#fff1f2', borderColor: '#ffe4e6' }}>
-              <p className="text-[10px] font-black uppercase mb-2" style={{ color: '#f43f5e' }}>মোট ব্যয়</p>
-              <p className="text-3xl font-black" style={{ color: '#e11d48' }}>৳{summary.expense.toLocaleString('en-US')}</p>
+          {/* Header Section */}
+          <div className="pb-12 mb-12" style={{ borderBottom: '2px solid #0f172a' }}>
+            <div className="flex justify-between items-start">
+              <div className="flex items-center gap-6">
+                <img src="/logo.png" alt="Logo" className="w-16 h-16 object-contain" onError={(e) => (e.currentTarget.style.display='none')} />
+                <div>
+                  <h1 className="text-4xl font-black tracking-tight" style={{ color: '#0f172a' }}>আমার পকেট</h1>
+                  <p className="text-sm font-bold uppercase tracking-[0.2em]" style={{ color: '#64748b' }}>Statement of Account</p>
+                </div>
+              </div>
+              <div className="text-right">
+                <p className="text-[10px] font-black uppercase tracking-widest mb-1" style={{ color: '#94a3b8' }}>প্রস্তুতকাল</p>
+                <p className="text-sm font-bold" style={{ color: '#0f172a' }}>{format(new Date(), 'dd MMMM, yyyy (hh:mm a)', { locale: bn })}</p>
+              </div>
             </div>
           </div>
 
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr style={{ borderBottom: '2px solid #f1f5f9' }}>
-                <th className="py-5 text-xs font-black uppercase" style={{ color: '#94a3b8' }}>তারিখ ও সময়</th>
-                <th className="py-5 text-xs font-black uppercase" style={{ color: '#94a3b8' }}>খাত / বিষয়</th>
-                <th className="py-5 text-xs font-black uppercase" style={{ color: '#94a3b8' }}>ধরন</th>
-                <th className="py-5 text-xs font-black uppercase text-right" style={{ color: '#94a3b8' }}>টাকা (৳)</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(exportDays === 'all' ? transactions : transactions.filter(t => isAfter(new Date(t.date), subDays(new Date(), exportDays as number)))).map((tx) => (
-                <tr key={tx.id} style={{ borderBottom: '1px solid #f8fafc' }}>
-                  <td className="py-5">
-                    <p className="font-bold text-sm" style={{ color: '#0f172a' }}>{format(new Date(tx.date), 'dd/MM/yyyy')}</p>
-                    <p className="text-[10px]" style={{ color: '#94a3b8' }}>{tx.time}</p>
-                  </td>
-                  <td className="py-5">
-                    <p className="font-bold text-sm" style={{ color: '#0f172a' }}>{tx.category}</p>
-                    {tx.note && <p className="text-[10px]" style={{ color: '#94a3b8' }}>{tx.note}</p>}
-                  </td>
-                  <td className="py-5">
-                    <span className="px-3 py-1 rounded-full text-[9px] font-black uppercase" style={{ 
-                      backgroundColor: tx.type === 'income' ? '#d1fae5' : '#ffe4e6',
-                      color: tx.type === 'income' ? '#065f46' : '#991b1b'
-                    }}>
-                      {tx.type === 'income' ? 'আয়' : 'ব্যয়'}
-                    </span>
-                  </td>
-                  <td className="py-5 text-right font-black text-lg" style={{ 
-                    color: tx.type === 'income' ? '#059669' : '#e11d48'
-                  }}>
-                    {tx.type === 'income' ? '+' : '-'} {tx.amount.toLocaleString('en-US')}
-                  </td>
+          {/* Account Summary & Info */}
+          <div className="grid grid-cols-2 gap-16 mb-16">
+            <div className="space-y-6">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest mb-2" style={{ color: '#94a3b8' }}>হিসাবধারী</p>
+                <h2 className="text-xl font-black" style={{ color: '#1e293b' }}>{user.displayName || 'ইউজার'}</h2>
+                <p className="text-sm font-medium" style={{ color: '#64748b' }}>{user.email}</p>
+              </div>
+              <div className="pt-4" style={{ borderTop: '1px solid #f1f5f9' }}>
+                <p className="text-[10px] font-black uppercase tracking-widest mb-2" style={{ color: '#94a3b8' }}>রিপোর্টের সময়কাল</p>
+                <p className="text-sm font-bold" style={{ color: '#334155' }}>
+                  {exportDays === 'all' ? 'শুরু থেকে আজ পর্যন্ত' : exportDays === 1 ? 'আজকের পূর্ণাঙ্গ তথ্য' : `বিগত ${exportDays} দিনের লেনদেন`}
+                </p>
+              </div>
+            </div>
+            
+            <div className="p-10 border" style={{ backgroundColor: '#f8fafc', borderColor: '#e2e8f0' }}>
+              <p className="text-[11px] font-black uppercase tracking-[0.2em] mb-6 pb-4 border-b" style={{ color: '#64748b', borderColor: '#e2e8f0' }}>আর্থিক স্থিতি (Summary)</p>
+              <div className="space-y-5">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-bold" style={{ color: '#64748b' }}>মোট আয়:</span>
+                  <span className="text-lg font-black" style={{ color: '#059669' }}>৳{summary.income.toLocaleString('en-US')}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-bold" style={{ color: '#64748b' }}>মোট ব্যয়:</span>
+                  <span className="text-lg font-black" style={{ color: '#e11d48' }}>৳{summary.expense.toLocaleString('en-US')}</span>
+                </div>
+                <div className="h-px my-2" style={{ backgroundColor: '#cbd5e1' }} />
+                <div className="flex justify-between items-center">
+                  <span className="text-base font-black px-4" style={{ color: '#0f172a', borderLeft: '4px solid #0f172a' }}>বর্তমান ব্যালেন্স:</span>
+                  <span className="text-2xl font-black" style={{ color: '#0f172a' }}>৳{balance.toLocaleString('en-US')}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Transaction Table */}
+          <div className="mb-20">
+            <h3 className="text-[11px] font-black uppercase tracking-[0.2em] mb-6 flex items-center gap-4" style={{ color: '#0f172a' }}>
+              <span className="shrink-0">লেনদেনের বিস্তারিত</span>
+              <div className="h-0.5 w-full" style={{ backgroundColor: '#0f172a' }} />
+            </h3>
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr style={{ borderBottom: '1px solid #94a3b8' }}>
+                  <th className="py-6 text-[10px] font-black uppercase" style={{ color: '#94a3b8' }}>তারিখ</th>
+                  <th className="py-6 text-[10px] font-black uppercase" style={{ color: '#94a3b8' }}>সময়</th>
+                  <th className="py-6 text-[10px] font-black uppercase" style={{ color: '#94a3b8' }}>খাত / বিবরণ</th>
+                  <th className="py-6 text-[10px] font-black uppercase" style={{ color: '#94a3b8' }}>টাইপ</th>
+                  <th className="py-6 text-[10px] font-black uppercase text-right" style={{ color: '#94a3b8' }}>পরিমাণ (৳)</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {(exportDays === 'all' ? transactions : transactions.filter(t => isAfter(new Date(t.date), subDays(new Date(), exportDays as number)))).length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="py-20 text-center font-bold italic" style={{ color: '#cbd5e1' }}>কোনো লেনদেন পাওয়া যায়নি</td>
+                  </tr>
+                ) : (
+                  (exportDays === 'all' ? transactions : transactions.filter(t => isAfter(new Date(t.date), subDays(new Date(), exportDays as number)))).map((tx) => (
+                    <tr key={tx.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                      <td className="py-6">
+                        <p className="font-bold text-sm tracking-tight" style={{ color: '#1e293b' }}>{format(new Date(tx.date), 'dd/MM/yyyy')}</p>
+                      </td>
+                      <td className="py-6">
+                        <p className="font-medium text-[10px] uppercase" style={{ color: '#94a3b8' }}>{tx.time}</p>
+                      </td>
+                      <td className="py-6">
+                        <p className="font-black text-sm" style={{ color: '#1e293b' }}>{tx.category}</p>
+                        {tx.note && <p className="text-[10px] mt-1" style={{ color: '#94a3b8' }}>{tx.note}</p>}
+                      </td>
+                      <td className="py-6">
+                        <span className="px-4 py-1.5 text-[9px] font-black uppercase border" style={{ 
+                          backgroundColor: tx.type === 'income' ? '#ecfdf5' : '#fff1f2',
+                          color: tx.type === 'income' ? '#047857' : '#be123c',
+                          borderColor: tx.type === 'income' ? '#a7f3d0' : '#fecdd3'
+                        }}>
+                          {tx.type === 'income' ? 'CREDIT' : 'DEBIT'}
+                        </span>
+                      </td>
+                      <td className="py-6 text-right">
+                        <p className="font-black text-xl italic" style={{ 
+                          color: tx.type === 'income' ? '#059669' : '#e11d48'
+                        }}>
+                          {tx.type === 'income' ? '+' : '-'} {tx.amount.toLocaleString('en-US')}
+                        </p>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
 
-          <div className="mt-20 pt-10 text-center" style={{ borderTop: '1px solid #e2e8f0' }}>
-            <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: '#cbd5e1' }}>Amar Pocket - Smart Finance Tracker</p>
+          {/* Footer Section */}
+          <div className="pt-12 text-center space-y-6" style={{ borderTop: '1px solid #e2e8f0' }}>
+            <div className="flex justify-center gap-12">
+              <div className="text-center">
+                <div className="w-32 h-px mx-auto mb-3" style={{ backgroundColor: '#cbd5e1' }} />
+                <p className="text-[8px] font-black uppercase tracking-widest" style={{ color: '#94a3b8' }}>Client Signature</p>
+              </div>
+              <div className="text-center">
+                <div className="w-32 h-px mx-auto mb-3" style={{ backgroundColor: '#e2e8f0' }} />
+                <p className="text-[8px] font-black uppercase tracking-widest" style={{ color: '#94a3b8' }}>Authorized Stamp</p>
+              </div>
+            </div>
+            <p className="text-[9px] font-bold uppercase tracking-[0.3em]" style={{ color: '#cbd5e1' }}>Amar Pocket • Generated Digital Document</p>
           </div>
         </div>
       </div>
