@@ -145,21 +145,35 @@ export default function App() {
 
   // Handle Auth
   useEffect(() => {
+    let isMounted = true;
+    
     const checkRedirect = async () => {
       try {
         const result = await getRedirectResult(auth);
-        if (result) {
-          // Success
+        if (result && isMounted) {
+          // Successfully logged in via redirect
+          showDialog('সফল', 'Google এর মাধ্যমে সফলভাবে লগইন হয়েছে।', 'success');
         }
       } catch (error: any) {
         console.error('Redirect Result Error:', error);
-        setAuthError(`লগইন ব্যর্থ: ${error.message}`);
+        if (isMounted) {
+          if (error.code === 'auth/credential-already-in-use') {
+            setAuthError('এই অ্যাকাউন্টটি ইতিপূর্বে অন্যভাবে নিবন্ধিত হয়েছে।');
+          } else {
+            setAuthError(`লগইন ব্যর্থ: ${error.message}`);
+          }
+        }
       }
     };
     checkRedirect();
 
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      if (currentUser && !currentUser.emailVerified && !currentUser.isAnonymous && currentUser.providerData[0]?.providerId === 'password') {
+      if (!isMounted) return;
+      
+      const isEmailPasswordUser = currentUser?.providerData?.some(p => p.providerId === 'password');
+      const needsEmailVerification = currentUser && !currentUser.emailVerified && isEmailPasswordUser;
+      
+      if (needsEmailVerification) {
         setIsVerifying(true);
       } else {
         setIsVerifying(false);
@@ -172,7 +186,11 @@ export default function App() {
       }
       setLoading(false);
     });
-    return () => unsubscribe();
+
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
   }, []);
 
   // Sync Transactions
@@ -217,23 +235,38 @@ export default function App() {
   const handleGoogleLogin = async () => {
     setAuthLoading(true);
     setAuthError('');
+    
+    // Check if we are in an iframe or on a potentially restrictive browser
+    const isIframe = window.self !== window.top;
+    
     try {
-      await signInWithPopup(auth, googleProvider);
+      if (isIframe) {
+        // In AI Studio preview, popup often fails. Redirect is safer for complex environments.
+        await signInWithRedirect(auth, googleProvider);
+      } else {
+        await signInWithPopup(auth, googleProvider);
+      }
     } catch (error: any) {
       console.error('Google Login Error:', error);
+      
       if (error.code === 'auth/popup-blocked') {
         showDialog(
           'পপআপ ব্লকড', 
-          'আপনার ব্রাউজারে পপআপ ব্লক করা আছে। আপনি কি অন্যভাবে (Redirect) চেষ্টা করতে চান?', 
+          'আপনার ব্রাউজারে পপআপ ব্লক করা আছে। বিকল্প পদ্ধতিতে চেষ্টা করতে চান?', 
           'confirm',
           () => signInWithRedirect(auth, googleProvider)
         );
       } else if (error.code === 'auth/cancelled-popup-request' || error.code === 'auth/popup-closed-by-user') {
-        // Silently handle
-      } else if (error.code === 'auth/operation-not-allowed') {
-        showDialog('সুবিধাটি বন্ধ', 'Firebase কনসোলে Google লগইন মেথডটি চালু করা হয়নি।', 'error');
+        // User closed
+      } else if (error.code === 'auth/auth-domain-config-required') {
+        showDialog('কনফিগ ত্রুটি', 'Firebase প্যানেলে ডোমেইন অথোরাইজেশন সেটআপ করতে হবে।', 'error');
       } else {
-        showDialog('লগইন ব্যর্থ', `Google লগইন করা সম্ভব হয়নি। অথবা ব্রাউজারে Incognito মোড থাকায় সমস্যা হতে পারে।`, 'error');
+        // Try fallback to redirect if popup failed for unknown reasons
+        try {
+          await signInWithRedirect(auth, googleProvider);
+        } catch (redirectError) {
+          showDialog('লগইন ব্যর্থ', `Google লগইন করা সম্ভব হয়নি। Error: ${error.code}`, 'error');
+        }
       }
     } finally {
       setAuthLoading(false);
