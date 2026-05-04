@@ -114,9 +114,11 @@ export default function App() {
 
   // PDF Export State
   const reportRef = useRef<HTMLDivElement>(null);
+  const dailyReportRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [exportDays, setExportDays] = useState<number | 'all'>(7);
+  const [reportDate, setReportDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [newDisplayName, setNewDisplayName] = useState('');
   const [newPhotoURL, setNewPhotoURL] = useState('');
@@ -269,6 +271,38 @@ export default function App() {
   }, [transactions]);
 
   const balance = summary.income - summary.expense;
+
+  const dailySummary = useMemo(() => {
+    return transactions.reduce((acc, curr) => {
+      const txDate = format(new Date(curr.date), 'yyyy-MM-dd');
+      if (txDate === reportDate) {
+        if (curr.type === 'income') acc.income += curr.amount;
+        else acc.expense += curr.amount;
+      }
+      return acc;
+    }, { income: 0, expense: 0 });
+  }, [transactions, reportDate]);
+
+  const dailyCash = dailySummary.income - dailySummary.expense;
+
+  const downloadDailyReportCard = async () => {
+    if (!dailyReportRef.current) return;
+    try {
+      const canvas = await html2canvas(dailyReportRef.current, {
+        scale: 4, // Higher scale for better quality
+        backgroundColor: '#f8fafc',
+        useCORS: true,
+        logging: false
+      });
+      const link = document.createElement('a');
+      link.download = `daily-report-${reportDate}.png`;
+      link.href = canvas.toDataURL('image/png', 1.0);
+      link.click();
+    } catch (error) {
+      console.error('Download error:', error);
+      showDialog(t.error, t.updateFailed, 'error');
+    }
+  };
 
   // Auth Actions
   const handleGoogleLogin = async () => {
@@ -511,7 +545,12 @@ export default function App() {
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50">
         <div className="relative">
           <div className="w-16 h-16 border-4 border-slate-100 border-t-emerald-500 rounded-full animate-spin" />
-          <img src="/logo.svg" alt="Logo" className="w-10 h-10 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+          <img 
+            src="/logo.png" 
+            alt="Logo" 
+            className="w-10 h-10 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" 
+            onError={(e) => { e.currentTarget.src = "/logo.svg"; }}
+          />
         </div>
         <p className="mt-6 text-slate-400 font-bold text-[10px] uppercase tracking-widest animate-pulse">{t.loading}</p>
       </div>
@@ -532,7 +571,12 @@ export default function App() {
         >
           <div className="text-center mb-10">
             <div className="bg-white w-20 h-20 rounded-[2.2rem] flex items-center justify-center mx-auto mb-5 shadow-2xl shadow-emerald-500/10 border-2 border-slate-50">
-              <img src="/logo.svg" alt="Logo" className="w-14 h-14 object-contain" />
+              <img 
+                src="/logo.png" 
+                alt="Logo" 
+                className="w-14 h-14 object-contain" 
+                onError={(e) => { e.currentTarget.src = "/logo.svg"; }}
+              />
             </div>
             <h1 className="text-3xl font-black text-slate-900 mb-1 tracking-tight">{t.appName}</h1>
             <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em] leading-none">{t.tagline}</p>
@@ -814,6 +858,93 @@ export default function App() {
             ))}
           </div>
         </div>
+
+        {/* Daily Report Section */}
+        <section className="space-y-4">
+          <div className="flex justify-between items-center px-1">
+            <h3 className="font-black text-lg text-slate-800 tracking-tight">{t.dailyReport}</h3>
+            <div className="relative">
+              <input 
+                type="date" 
+                value={reportDate}
+                onChange={(e) => setReportDate(e.target.value)}
+                className="bg-white px-4 py-2 rounded-xl border border-slate-100 text-[10px] font-black text-slate-600 outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all cursor-pointer"
+              />
+            </div>
+          </div>
+
+          <div className="relative group">
+            <div 
+              ref={dailyReportRef}
+              className="rounded-[2.5rem] p-8 relative overflow-hidden shadow-2xl border"
+              style={{ backgroundColor: '#ffffff', color: '#0f172a', borderColor: '#f1f5f9' }}
+            >
+              {/* Decorative elements for the card */}
+              <div className="absolute top-0 right-0 w-32 h-32 rounded-full -mr-16 -mt-16 blur-3xl opacity-40" style={{ backgroundColor: '#dcfce7' }} />
+              <div className="absolute bottom-0 left-0 w-24 h-24 rounded-full -ml-12 -mb-12 blur-2xl opacity-30" style={{ backgroundColor: '#ecfdf5' }} />
+ 
+              <div className="relative z-10 flex flex-col gap-8">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] mb-1" style={{ color: '#64748b' }}>{t.dailySummary}</p>
+                    <h4 className="text-xl font-black" style={{ color: '#0f172a' }}>{format(new Date(reportDate), 'dd MMMM, yyyy', { locale })}</h4>
+                  </div>
+                  <div className="p-2 rounded-2xl" style={{ backgroundColor: '#ecfdf5' }}>
+                    <img 
+                      src="/logo.png" 
+                      alt="Logo" 
+                      className="w-8 h-8 object-contain" 
+                      onError={(e) => { e.currentTarget.src = "/logo.svg"; }}
+                    />
+                  </div>
+                </div>
+ 
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="p-5 rounded-3xl border" style={{ backgroundColor: '#f0fdf4', borderStyle: 'dashed', borderColor: '#bcf2d1' }}>
+                    <div className="flex items-center gap-2 mb-2">
+                      <TrendingUp className="w-3 h-3" style={{ color: '#059669' }} />
+                      <span className="text-[8px] font-black uppercase tracking-widest" style={{ color: '#059669' }}>{t.income}</span>
+                    </div>
+                    <p className="text-lg font-black" style={{ color: '#065f46' }}>৳{dailySummary.income.toLocaleString('en-US')}</p>
+                  </div>
+                  <div className="p-5 rounded-3xl border" style={{ backgroundColor: '#fff1f2', borderStyle: 'dashed', borderColor: '#fecdd3' }}>
+                    <div className="flex items-center gap-2 mb-2">
+                      <TrendingDown className="w-3 h-3" style={{ color: '#e11d48' }} />
+                      <span className="text-[8px] font-black uppercase tracking-widest" style={{ color: '#e11d48' }}>{t.expense}</span>
+                    </div>
+                    <p className="text-lg font-black" style={{ color: '#9f1239' }}>৳{dailySummary.expense.toLocaleString('en-US')}</p>
+                  </div>
+                </div>
+ 
+                <div className="pt-6 border-t flex justify-between items-end" style={{ borderColor: '#f1f5f9' }}>
+                  <div>
+                    <p className="text-[8px] font-black uppercase tracking-widest mb-1" style={{ color: '#64748b' }}>{t.netCash}</p>
+                    <p className="text-3xl font-black tracking-tighter" style={{ color: dailyCash >= 0 ? '#10b981' : '#e11d48' }}>
+                      ৳{dailyCash.toLocaleString('en-US')}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <div className="mb-2">
+                      <p className="text-[10px] font-black uppercase tracking-widest" style={{ color: '#0f172a' }}>{t.appName}</p>
+                    </div>
+                    <div className="flex items-center gap-1.5 justify-end">
+                       <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ backgroundColor: '#10b981' }} />
+                       <span className="text-[8px] font-bold" style={{ color: '#64748b' }}>LIVE REPORT</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <button 
+              onClick={downloadDailyReportCard}
+              className="absolute -bottom-6 right-8 bg-emerald-500 text-slate-950 w-12 h-12 rounded-full shadow-2xl shadow-emerald-500/40 hover:scale-110 active:scale-95 transition-all flex items-center justify-center z-20 group border-4 border-white"
+              title={t.downloadImage}
+            >
+              <Download className="w-5 h-5" />
+            </button>
+          </div>
+        </section>
 
         {/* Recent Transactions List */}
         <section className="space-y-4">
@@ -1255,7 +1386,12 @@ export default function App() {
           <div className="pb-12 mb-12" style={{ borderBottom: '2px solid #0f172a' }}>
             <div className="flex justify-between items-start">
               <div className="flex items-center gap-6">
-                <img src="/logo.svg" alt="Logo" className="w-16 h-16 object-contain" />
+                <img 
+                  src="/logo.png" 
+                  alt="Logo" 
+                  className="w-16 h-16 object-contain" 
+                  onError={(e) => { e.currentTarget.src = "/logo.svg"; }}
+                />
                 <div>
                   <h1 className="text-4xl font-black tracking-tight" style={{ color: '#0f172a' }}>{t.appName}</h1>
                   <p className="text-sm font-bold uppercase tracking-[0.2em]" style={{ color: '#64748b' }}>{t.statementOfAccount}</p>

@@ -3,6 +3,12 @@
   "name": "আমার পকেট (Amar Pocket)",
   "icons": [
     {
+      "src": "/logo.png",
+      "type": "image/png",
+      "sizes": "192x192 512x512",
+      "purpose": "any maskable"
+    },
+    {
       "src": "/logo.svg",
       "type": "image/svg+xml",
       "sizes": "192x192 512x512",
