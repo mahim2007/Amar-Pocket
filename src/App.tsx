@@ -46,7 +46,9 @@ import {
   MoreHorizontal,
   Calendar,
   Bell,
-  ShieldCheck
+  ShieldCheck,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { format, subDays, isAfter } from 'date-fns';
@@ -83,6 +85,7 @@ import {
   doc, 
   deleteDoc, 
   getDocs,
+  getDoc,
   orderBy,
   limit,
   updateDoc,
@@ -161,30 +164,62 @@ export default function App() {
   const [initialLang, setInitialLang] = useState<Language>('en');
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [dismissedNotifications, setDismissedNotifications] = useState<string[]>([]);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showAdminPassword, setShowAdminPassword] = useState(false);
   
-  // Load dismissed notifications
+  // Load dismissed notifications from user data
   useEffect(() => {
-    const saved = localStorage.getItem('dismissed_notifs');
-    if (saved) {
-      try {
-        setDismissedNotifications(JSON.parse(saved));
-      } catch (e) {
-        console.error('Failed to parse dismissed notifications');
-      }
+    if (user && (user as any).dismissedNotifications) {
+      setDismissedNotifications((user as any).dismissedNotifications);
     }
-  }, []);
-
-  // Save dismissed notifications
-  useEffect(() => {
-    localStorage.setItem('dismissed_notifs', JSON.stringify(dismissedNotifications));
-  }, [dismissedNotifications]);
+  }, [user]);
 
   const activeNotifications = useMemo(() => {
-    return notifications.filter(n => !dismissedNotifications.includes(n.id));
-  }, [notifications, dismissedNotifications]);
+    if (!user) return [];
+    
+    // Sort all notifications by date descending
+    const sorted = [...notifications].sort((a, b) => 
+      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
 
-  const dismissNotification = (id: string) => {
-    setDismissedNotifications(prev => [...prev, id]);
+    return sorted.filter(n => {
+      const notifDate = new Date(n.createdAt);
+      const userJoinDate = (user as any).createdAt ? new Date((user as any).createdAt) : new Date();
+      
+      // 1. Must not be dismissed
+      // 2. Notification must be sent after user joined
+      return !dismissedNotifications.includes(n.id) && 
+             notifDate.getTime() >= (userJoinDate.getTime() - 60000); // 1 min buffer
+    });
+  }, [notifications, dismissedNotifications, user]);
+
+  const dismissNotification = async (id: string) => {
+    const newDismissed = [...dismissedNotifications, id];
+    setDismissedNotifications(newDismissed);
+    
+    if (user) {
+      try {
+        await updateDoc(doc(db, 'users', user.uid), {
+          dismissedNotifications: newDismissed
+        });
+      } catch (err) {
+        console.error('Failed to persist dismissed notification:', err);
+      }
+    }
+  };
+
+  const clearAllNotifications = async () => {
+    const allIds = notifications.map(n => n.id);
+    setDismissedNotifications(allIds);
+    if (user) {
+      try {
+        await updateDoc(doc(db, 'users', user.uid), {
+          dismissedNotifications: allIds
+        });
+      } catch (err) {
+        console.error('Failed to clear notifications in DB');
+      }
+    }
   };
   
   // Admin Auth States
@@ -340,16 +375,23 @@ export default function App() {
 
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Password</label>
-                <div className="relative">
+                <div className="relative group">
                   <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
                   <input 
-                    type="password" 
+                    type={showAdminPassword ? "text" : "password"} 
                     placeholder="••••••••"
                     value={adminPasswordInput}
                     onChange={(e) => setAdminPasswordInput(e.target.value)}
-                    className="w-full bg-slate-50 border-none rounded-2xl py-4 pl-12 pr-4 text-sm font-medium focus:ring-2 focus:ring-slate-900/10 transition-all outline-none"
+                    className="w-full bg-slate-50 border-none rounded-2xl py-4 pl-12 pr-12 text-sm font-medium focus:ring-2 focus:ring-slate-900/10 transition-all outline-none"
                     required
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowAdminPassword(!showAdminPassword)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-600 transition-colors p-2"
+                  >
+                    {showAdminPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
                 </div>
               </div>
 
@@ -489,15 +531,28 @@ export default function App() {
         // Sync user to Firestore in background
         try {
           const userDocRef = doc(db, 'users', currentUser.uid);
+          // Set initial user state with common fields so it's usable right away
+          const enhancedUser = {
+            ...currentUser,
+            displayName: currentUser.displayName || 'User',
+            photoURL: currentUser.photoURL || ''
+          };
+          setUser(enhancedUser);
+          
           // Non-blocking sync
-          syncUserRecord(currentUser, userDocRef);
+          syncUserRecord(currentUser, userDocRef).then((fullUserData) => {
+            if (fullUserData && isMounted) {
+              setUser(prev => ({ ...prev, ...fullUserData }));
+            }
+          });
         } catch (err) {
           console.error('Error syncing user:', err);
         }
-
+        
         setNewDisplayName(currentUser.displayName || '');
         setNewPhotoURL(currentUser.photoURL || '');
       }
+      setLoading(false);
     });
 
     return () => {
@@ -509,18 +564,18 @@ export default function App() {
   // Helper for non-blocking user sync
   const syncUserRecord = async (currentUser: any, userDocRef: any) => {
     try {
-      const userDoc = await getDocs(query(collection(db, 'users'), where('email', '==', currentUser.email)));
-      const userData = userDoc.docs[0]?.data();
+      const userDoc = await getDoc(userDocRef);
+      const userData = userDoc.exists() ? userDoc.data() as any : null;
       
       if (userData?.blocked) {
         await signOut(auth);
         showDialog(t.error, lang === 'bn' ? 'আপনার অ্যাকাউন্টটি ব্লক করা হয়েছে।' : 'Your account has been blocked.', 'error');
         setUser(null);
-        return;
+        return null;
       }
 
       const now = new Date().toISOString();
-      const userPayload = {
+      const userPayload: any = {
         displayName: currentUser.displayName || 'User',
         email: currentUser.email || '',
         lastLogin: now,
@@ -528,17 +583,19 @@ export default function App() {
         photoURL: currentUser.photoURL || ''
       };
 
-      if (userDoc.empty) {
-        await setDoc(userDocRef, {
-          ...userPayload,
-          createdAt: now,
-          blocked: false
-        });
+      if (!userDoc.exists()) {
+        userPayload.createdAt = now;
+        userPayload.blocked = false;
+        userPayload.dismissedNotifications = [];
+        await setDoc(userDocRef, userPayload);
+        return userPayload;
       } else {
         await updateDoc(userDocRef, userPayload);
+        return { ...userData, ...userPayload };
       }
     } catch (err) {
       console.error('Background sync error:', err);
+      return null;
     }
   };
 
@@ -559,7 +616,7 @@ export default function App() {
     const unsubscribe = onSnapshot(q, { includeMetadataChanges: true }, (snapshot) => {
       const txs = snapshot.docs.map(doc => ({
         id: doc.id,
-        ...doc.data()
+        ...(doc.data() as any)
       })) as Transaction[];
       
       setTransactions(txs);
@@ -1103,14 +1160,21 @@ export default function App() {
             <div className="relative group">
               <Lock className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-emerald-500 transition-colors" />
               <input 
-                type="password" 
+                type={showPassword ? "text" : "password"} 
                 placeholder={t.passwordPlaceholder}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full pl-14 pr-6 py-5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-4 focus:ring-emerald-500/10 focus:bg-white text-slate-900 placeholder:text-slate-400 transition-all font-bold text-base"
+                className="w-full pl-14 pr-14 py-5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-4 focus:ring-emerald-500/10 focus:bg-white text-slate-900 placeholder:text-slate-400 transition-all font-bold text-base"
                 required
                 minLength={6}
               />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-emerald-500 transition-colors p-2"
+              >
+                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+              </button>
             </div>
 
             {authError && (
@@ -2033,7 +2097,7 @@ export default function App() {
 
               {activeNotifications.length > 0 && (
                 <button 
-                  onClick={() => setDismissedNotifications(notifications.map(n => n.id))}
+                  onClick={clearAllNotifications}
                   className="mt-8 py-5 w-full bg-slate-50 rounded-2xl text-slate-400 font-black text-[10px] uppercase tracking-[0.2em] hover:text-slate-900 hover:bg-slate-100 transition-all"
                 >
                   Clear All Notifications
