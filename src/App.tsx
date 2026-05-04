@@ -121,10 +121,6 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedQuickCategory, setSelectedQuickCategory] = useState('');
 
-  const expenseCategories = ['খাবার', 'যাতায়াত', 'বাজার', 'বিল', 'কেনাকাটা', 'মেডিকেল', 'অন্যান্য'];
-  const incomeCategories = ['বেতন', 'বোনাস', 'উপহার', 'বিনিয়োগ', 'অন্যান্য'];
-  const quickCategories = type === 'expense' ? expenseCategories : incomeCategories;
-
   const filteredTransactions = useMemo(() => {
     return transactions.filter(tx => 
       tx.category.toLowerCase().includes(searchQuery.toLowerCase()) || 
@@ -161,6 +157,10 @@ export default function App() {
   const t = translations[lang];
   const locale = lang === 'bn' ? bn : enUS;
 
+  const expenseCategories = t.categories.expense;
+  const incomeCategories = t.categories.income;
+  const quickCategories = type === 'expense' ? expenseCategories : incomeCategories;
+
   const toggleAdd = () => {
     if (isAdding) {
       setIsAdding(false);
@@ -193,6 +193,8 @@ export default function App() {
     'Shopping': <ShoppingBag className="w-4 h-4" />,
     'মেডিকেল': <Stethoscope className="w-4 h-4" />,
     'Medical': <Stethoscope className="w-4 h-4" />,
+    'Business': <Briefcase className="w-4 h-4" />,
+    'Entertainment': <MoreHorizontal className="w-4 h-4" />,
     'বেতন': <Briefcase className="w-4 h-4" />,
     'Salary': <Briefcase className="w-4 h-4" />,
     'বোনাস': <Sparkles className="w-4 h-4" />,
@@ -760,13 +762,13 @@ export default function App() {
 
         {/* Language Toggle */}
         <div className="absolute top-6 right-8 z-20">
-          <button 
-            onClick={() => setLang(lang === 'bn' ? 'en' : 'bn')}
-            className="flex items-center gap-2 px-4 py-2.5 bg-white/80 backdrop-blur-md rounded-2xl shadow-sm border border-white text-[10px] font-black text-slate-600 uppercase tracking-[0.2em] hover:bg-white transition-all active:scale-95 group"
-          >
-            <Sparkles className="w-3 h-3 text-emerald-500 group-hover:rotate-12 transition-transform" />
-            {lang === 'bn' ? 'English' : 'বাংলা'}
-          </button>
+            <button 
+              onClick={() => setLang(lang === 'bn' ? 'en' : 'bn')}
+              className="flex items-center gap-2 px-4 py-2.5 bg-white/80 backdrop-blur-md rounded-2xl shadow-sm border border-white text-[10px] font-black text-slate-600 uppercase tracking-[0.2em] hover:bg-white transition-all active:scale-95 group"
+            >
+              <Sparkles className="w-3 h-3 text-emerald-500 group-hover:rotate-12 transition-transform" />
+              {lang === 'bn' ? 'English' : 'বাংলা'}
+            </button>
         </div>
 
         <motion.div 
@@ -874,7 +876,7 @@ export default function App() {
                   onClick={handleForgotPassword}
                   className="text-[10px] font-black text-emerald-500 hover:text-emerald-600 transition-colors uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {authLoading ? (lang === 'bn' ? 'অপেক্ষা করুন...' : 'Sending...') : t.forgotPassword}
+                  {authLoading ? t.sending : t.forgotPassword}
                 </button>
               </div>
             )}
@@ -991,7 +993,7 @@ export default function App() {
             </button>
             <div onClick={() => setIsProfileOpen(true)} className="cursor-pointer">
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">{t.goodDay}</p>
-              <h2 className="font-bold text-sm text-slate-800">{user.displayName?.split(' ')[0] || t.user}</h2>
+              <h2 className="font-bold text-sm text-slate-800">{user.displayName || t.user}</h2>
             </div>
           </div>
           <button 
@@ -1197,15 +1199,15 @@ export default function App() {
         {/* Today's Activity Summary - UX Enhancement */}
         <section className="grid grid-cols-3 gap-3">
           <div className="bg-white p-4 rounded-3xl border border-slate-100 shadow-sm">
-            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">{lang === 'bn' ? 'আজকের আয়' : 'In today'}</p>
+            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">{t.inToday}</p>
             <p className="text-sm font-black text-emerald-600">৳{dailySummary.income.toLocaleString()}</p>
           </div>
           <div className="bg-white p-4 rounded-3xl border border-slate-100 shadow-sm">
-            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">{lang === 'bn' ? 'আজকের ব্যয়' : 'Out today'}</p>
+            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">{t.outToday}</p>
             <p className="text-sm font-black text-rose-500">৳{dailySummary.expense.toLocaleString()}</p>
           </div>
           <div className="bg-white p-4 rounded-3xl border border-slate-100 shadow-sm">
-            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">{lang === 'bn' ? 'অবশিষ্ট' : 'Balance'}</p>
+            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">{t.balance}</p>
             <p className="text-sm font-black text-slate-900">৳{dailyCash.toLocaleString()}</p>
           </div>
         </section>
@@ -1227,7 +1229,7 @@ export default function App() {
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder={lang === 'bn' ? 'অনুসন্ধান করুন...' : 'Search...'}
+                placeholder={t.searchPlaceholder}
                 className="w-full bg-white border border-slate-100 rounded-2xl py-3 pl-11 pr-4 text-xs font-bold text-slate-600 outline-none focus:ring-4 focus:ring-emerald-500/5 focus:border-emerald-500/20 transition-all shadow-sm"
               />
               {searchQuery && (
@@ -1263,7 +1265,7 @@ export default function App() {
                    <div className="w-20 h-20 bg-slate-50 rounded-[2.5rem] flex items-center justify-center mx-auto text-slate-200">
                       <Search className="w-8 h-8" />
                    </div>
-                   <p className="text-slate-400 font-bold text-xs uppercase tracking-widest">{searchQuery ? (lang === 'bn' ? 'কিছু পাওয়া যায়নি' : 'No matches found') : t.noRecords}</p>
+                   <p className="text-slate-400 font-bold text-xs uppercase tracking-widest">{searchQuery ? t.noMatches : t.noRecords}</p>
                    {searchQuery && (
                      <button 
                        onClick={() => setSearchQuery('')}
@@ -1457,7 +1459,7 @@ export default function App() {
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest font-sans">{t.categoryLabel}</label>
                     {category && (
                       <span className="text-[8px] font-black text-emerald-500 uppercase tracking-widest animate-pulse">
-                        {category} {lang === 'bn' ? 'নির্বাচিত' : 'Selected'}
+                        {category} {t.selected}
                       </span>
                     )}
                   </div>
