@@ -71,6 +71,7 @@ import {
   updateProfile,
   sendEmailVerification,
   reload,
+  sendPasswordResetEmail,
   collection, 
   addDoc, 
   query, 
@@ -154,7 +155,7 @@ export default function App() {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [lang, setLang] = useState<Language>(() => {
     const saved = localStorage.getItem('pocket_lang');
-    return (saved as Language) || 'bn';
+    return (saved as Language) || 'en';
   });
 
   const t = translations[lang];
@@ -380,7 +381,7 @@ export default function App() {
     setAuthError('');
     
     try {
-      // Prefer popup
+      // Force popup for this environment
       await signInWithPopup(auth, googleProvider);
     } catch (error: any) {
       console.error('Google Login Error:', error);
@@ -389,20 +390,14 @@ export default function App() {
         showDialog(
           t.popupBlockedTitle, 
           t.popupBlockedMessage, 
-          'confirm',
-          () => signInWithRedirect(auth, googleProvider)
+          'alert'
         );
       } else if (error.code === 'auth/cancelled-popup-request' || error.code === 'auth/popup-closed-by-user') {
         // User closed
       } else if (error.code === 'auth/operation-not-allowed') {
         showDialog(t.configProblemTitle, t.configProblemMessage, 'error');
       } else {
-        // Try fallback if popup fails
-        try {
-          await signInWithRedirect(auth, googleProvider);
-        } catch (redirectError) {
-          showDialog(t.login + ' ' + t.error, t.googleLoginFailed + ` (Error: ${error.code})`, 'error');
-        }
+        showDialog(t.login + ' ' + t.error, t.googleLoginFailed + ` (Error: ${error.code})`, 'error');
       }
     } finally {
       setAuthLoading(false);
@@ -453,6 +448,30 @@ export default function App() {
       }
     } catch (error) {
       console.error(error);
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    if (!email) {
+      setAuthError(lang === 'bn' ? 'ইমেইল এড্রেস লিখুন' : 'Please enter email address');
+      return;
+    }
+    setAuthLoading(true);
+    setAuthError('');
+    try {
+      await sendPasswordResetEmail(auth, email);
+      showDialog(t.resetPasswordTitle, t.resetPasswordMessage.replace('{email}', email), 'success');
+    } catch (error: any) {
+      console.error('Password Reset Error:', error);
+      let errorMsg = t.resetPasswordError;
+      if (error.code === 'auth/user-not-found') {
+        errorMsg = lang === 'bn' ? 'এই ইমেইলে কোনো অ্যাকাউন্ট পাওয়া যায়নি।' : 'No account found with this email.';
+      } else if (error.code === 'auth/invalid-email') {
+        errorMsg = lang === 'bn' ? 'অকার্যকর ইমেইল এড্রেস।' : 'Invalid email address.';
+      }
+      showDialog(t.error, errorMsg, 'error');
     } finally {
       setAuthLoading(false);
     }
@@ -654,6 +673,67 @@ export default function App() {
     }, 500);
   };
 
+  const renderDialog = () => (
+    <AnimatePresence>
+      {dialog.isOpen && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-6">
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={closeDialog}
+            className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm"
+          />
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.9, y: 20 }}
+            className="relative w-full max-w-[340px] bg-white rounded-[2.5rem] p-8 shadow-[0_32px_64px_-12px_rgba(0,0,0,0.12)] border border-slate-100 text-center"
+          >
+            <div className={cn(
+              "w-20 h-20 rounded-[1.8rem] flex items-center justify-center mx-auto mb-6 shadow-sm",
+              dialog.type === 'success' ? "bg-emerald-50 text-emerald-500" : 
+              dialog.type === 'error' ? "bg-rose-50 text-rose-500" :
+              dialog.type === 'confirm' ? "bg-blue-50 text-blue-500" : "bg-slate-50 text-slate-500"
+            )}>
+              {dialog.type === 'success' ? <PlusCircle className="w-10 h-10" /> : 
+               dialog.type === 'error' ? <XCircle className="w-10 h-10" /> :
+               dialog.type === 'confirm' ? <HelpCircle className="w-10 h-10" /> : <Info className="w-10 h-10" />}
+            </div>
+
+            <h3 className="text-xl font-black text-slate-900 mb-3 tracking-tight">{dialog.title}</h3>
+            <p className="text-slate-500 text-sm font-medium mb-8 leading-relaxed px-1">{dialog.message}</p>
+
+            <div className="flex gap-3">
+              {dialog.type === 'confirm' && (
+                <button 
+                  onClick={closeDialog}
+                  className="flex-1 py-4.5 rounded-2xl bg-slate-50 text-slate-400 font-black text-xs hover:bg-slate-100 transition-all border border-slate-100"
+                >
+                  {t.no}
+                </button>
+              )}
+              <button 
+                onClick={() => {
+                  if (dialog.onConfirm) dialog.onConfirm();
+                  closeDialog();
+                }}
+                className={cn(
+                  "flex-[1.5] py-4.5 rounded-2xl font-black text-xs shadow-lg transition-all active:scale-95",
+                  dialog.type === 'confirm' ? "bg-slate-900 text-white shadow-slate-900/10" : 
+                  dialog.type === 'error' ? "bg-rose-500 text-white shadow-rose-500/10" :
+                  "bg-emerald-500 text-slate-950 shadow-emerald-500/10"
+                )}
+              >
+                {dialog.type === 'confirm' ? t.yesConfirm : t.ok}
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+    </AnimatePresence>
+  );
+
   // --- Loading Screen ---
   if (loading && !user) {
     return (
@@ -677,6 +757,17 @@ export default function App() {
       <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6 relative overflow-hidden">
         <div className="absolute top-[-10%] left-[-10%] w-[70%] h-[70%] bg-emerald-500/10 blur-[130px] rounded-full animate-pulse" />
         <div className="absolute bottom-[-10%] right-[-10%] w-[60%] h-[60%] bg-blue-500/10 blur-[110px] rounded-full animate-pulse" style={{ animationDelay: '1s' }} />
+
+        {/* Language Toggle */}
+        <div className="absolute top-6 right-8 z-20">
+          <button 
+            onClick={() => setLang(lang === 'bn' ? 'en' : 'bn')}
+            className="flex items-center gap-2 px-4 py-2.5 bg-white/80 backdrop-blur-md rounded-2xl shadow-sm border border-white text-[10px] font-black text-slate-600 uppercase tracking-[0.2em] hover:bg-white transition-all active:scale-95 group"
+          >
+            <Sparkles className="w-3 h-3 text-emerald-500 group-hover:rotate-12 transition-transform" />
+            {lang === 'bn' ? 'English' : 'বাংলা'}
+          </button>
+        </div>
 
         <motion.div 
           initial={{ opacity: 0, scale: 0.95 }}
@@ -775,6 +866,19 @@ export default function App() {
               </motion.p>
             )}
 
+            {authMode === 'login' && (
+              <div className="flex justify-end px-1">
+                <button 
+                  disabled={authLoading}
+                  type="button" 
+                  onClick={handleForgotPassword}
+                  className="text-[10px] font-black text-emerald-500 hover:text-emerald-600 transition-colors uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {authLoading ? (lang === 'bn' ? 'অপেক্ষা করুন...' : 'Sending...') : t.forgotPassword}
+                </button>
+              </div>
+            )}
+
             <button 
               disabled={authLoading}
               type="submit"
@@ -803,6 +907,7 @@ export default function App() {
             {t.googleLogin}
           </button>
         </motion.div>
+        {renderDialog()}
       </div>
     );
   }
@@ -860,6 +965,7 @@ export default function App() {
             </button>
           </div>
         </motion.div>
+        {renderDialog()}
       </div>
     );
   }
@@ -1564,64 +1670,7 @@ export default function App() {
       </AnimatePresence>
 
       {/* --- CUSTOM DIALOG / ALERT --- */}
-      <AnimatePresence>
-        {dialog.isOpen && (
-          <div className="fixed inset-0 z-[200] flex items-center justify-center p-6">
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={closeDialog}
-              className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm"
-            />
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="relative w-full max-w-[340px] bg-white rounded-[2.5rem] p-8 shadow-[0_32px_64px_-12px_rgba(0,0,0,0.12)] border border-slate-100 text-center"
-            >
-              <div className={cn(
-                "w-20 h-20 rounded-[1.8rem] flex items-center justify-center mx-auto mb-6 shadow-sm",
-                dialog.type === 'success' ? "bg-emerald-50 text-emerald-500" : 
-                dialog.type === 'error' ? "bg-rose-50 text-rose-500" :
-                dialog.type === 'confirm' ? "bg-blue-50 text-blue-500" : "bg-slate-50 text-slate-500"
-              )}>
-                {dialog.type === 'success' ? <PlusCircle className="w-10 h-10" /> : 
-                 dialog.type === 'error' ? <XCircle className="w-10 h-10" /> :
-                 dialog.type === 'confirm' ? <HelpCircle className="w-10 h-10" /> : <Info className="w-10 h-10" />}
-              </div>
-
-              <h3 className="text-xl font-black text-slate-900 mb-3 tracking-tight">{dialog.title}</h3>
-              <p className="text-slate-500 text-sm font-medium mb-8 leading-relaxed px-1">{dialog.message}</p>
-
-              <div className="flex gap-3">
-                {dialog.type === 'confirm' && (
-                  <button 
-                    onClick={closeDialog}
-                    className="flex-1 py-4.5 rounded-2xl bg-slate-50 text-slate-400 font-black text-xs hover:bg-slate-100 transition-all border border-slate-100"
-                  >
-                    {t.no}
-                  </button>
-                )}
-                <button 
-                  onClick={() => {
-                    if (dialog.onConfirm) dialog.onConfirm();
-                    closeDialog();
-                  }}
-                  className={cn(
-                    "flex-[1.5] py-4.5 rounded-2xl font-black text-xs shadow-lg transition-all active:scale-95",
-                    dialog.type === 'confirm' ? "bg-slate-900 text-white shadow-slate-900/10" : 
-                    dialog.type === 'error' ? "bg-rose-500 text-white shadow-rose-500/10" :
-                    "bg-emerald-500 text-slate-950 shadow-emerald-500/10"
-                  )}
-                >
-                  {dialog.type === 'confirm' ? t.yesConfirm : t.ok}
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+      {renderDialog()}
 
       {/* --- HIDDEN REPORT COMPONENT FOR PDF CAPTURE --- */}
       <div className="fixed left-[-9999px] top-[-9999px]">
