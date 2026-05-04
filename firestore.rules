@@ -29,8 +29,8 @@ service cloud.firestore {
 
     // Transaction Validation
     function isValidTransaction(data) {
-      return data.keys().hasAll(['amount', 'category', 'type', 'date', 'time', 'note', 'userId'])
-        && data.keys().size() == 7
+      return data.keys().hasAll(['amount', 'category', 'type', 'date', 'time', 'note', 'userId', 'createdAt'])
+        && data.keys().size() == 8
         && data.amount is number
         && data.amount > 0
         && data.category is string && data.category.size() <= 100
@@ -38,7 +38,8 @@ service cloud.firestore {
         && data.date is string
         && data.time is string
         && data.note is string && data.note.size() <= 500
-        && data.userId == request.auth.uid;
+        && data.userId == request.auth.uid
+        && data.createdAt is string;
     }
 
     match /transactions/{transactionId} {

@@ -8,14 +8,38 @@ import {
   signInWithEmailAndPassword,
   updateProfile,
   sendEmailVerification,
-  reload
+  reload,
+  GoogleAuthProvider,
+  signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult
 } from 'firebase/auth';
-import { getFirestore, collection, addDoc, query, where, onSnapshot, doc, deleteDoc, orderBy, limit } from 'firebase/firestore';
+import { 
+  initializeFirestore, 
+  persistentLocalCache, 
+  persistentMultipleTabManager,
+  collection, 
+  addDoc, 
+  query, 
+  where, 
+  onSnapshot, 
+  doc, 
+  deleteDoc, 
+  orderBy, 
+  limit 
+} from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+
+// Initialize Firestore with persistent local cache
+export const db = initializeFirestore(app, {
+  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
+}, firebaseConfig.firestoreDatabaseId);
+
 export const auth = getAuth(app);
+export const googleProvider = new GoogleAuthProvider();
+googleProvider.setCustomParameters({ prompt: 'select_account' });
 
 export enum OperationType {
   CREATE = 'create',
@@ -62,6 +86,9 @@ export {
   updateProfile,
   sendEmailVerification,
   reload,
+  signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   collection, 
   addDoc, 
   query, 

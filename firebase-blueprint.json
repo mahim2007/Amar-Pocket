@@ -11,9 +11,10 @@
         "date": { "type": "string", "format": "date-time", "description": "ISO timestamp of the transaction." },
         "time": { "type": "string", "description": "Formatted time string (e.g. 10:30 AM)." },
         "note": { "type": "string", "description": "Optional note." },
-        "userId": { "type": "string", "description": "ID of the user who owns this transaction." }
+        "userId": { "type": "string", "description": "ID of the user who owns this transaction." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "ISO timestamp of when the record was created." }
       },
-      "required": ["amount", "category", "type", "date", "userId"]
+      "required": ["amount", "category", "type", "date", "userId", "createdAt"]
     }
   },
   "firestore": {
