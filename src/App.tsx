@@ -75,6 +75,9 @@ import {
   sendEmailVerification,
   reload,
   sendPasswordResetEmail,
+  sendSignInLinkToEmail,
+  isSignInWithEmailLink,
+  signInWithEmailLink,
   collection, 
   addDoc, 
   query, 
@@ -159,6 +162,38 @@ export default function App() {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [lang, setLang] = useState<Language>('en');
   const [initialLang, setInitialLang] = useState<Language>('en');
+  
+  // Admin Passwordless Auth States
+  const [adminEmailInput, setAdminEmailInput] = useState('');
+  const [adminLinkSent, setAdminLinkSent] = useState(false);
+  const [adminAuthError, setAdminAuthError] = useState('');
+  const [adminAuthLoading, setAdminAuthLoading] = useState(false);
+  const [isAdminVerifying, setIsAdminVerifying] = useState(false);
+
+  useEffect(() => {
+    const checkEmailLink = async () => {
+      if (isSignInWithEmailLink(auth, window.location.href)) {
+        setIsAdminVerifying(true);
+        let email = window.localStorage.getItem('emailForSignIn');
+        if (!email) {
+          email = window.prompt('Please provide your email for confirmation');
+        }
+        
+        if (email) {
+          try {
+            await signInWithEmailLink(auth, email, window.location.href);
+            window.localStorage.removeItem('emailForSignIn');
+            showDialog(t.success, 'Admin authenticated successfully!', 'success');
+          } catch (error: any) {
+            console.error('Error signing in with email link', error);
+            showDialog(t.error, 'Failed to authenticate: ' + error.message, 'error');
+          }
+        }
+        setIsAdminVerifying(false);
+      }
+    };
+    checkEmailLink();
+  }, []);
 
   useEffect(() => {
     const saved = localStorage.getItem('pocket_lang');
@@ -215,8 +250,34 @@ export default function App() {
 
   const adminEmail = 'mohammadmahim2007@gmail.com';
 
+  const handleAdminLinkSend = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (adminEmailInput.toLowerCase() !== adminEmail.toLowerCase()) {
+      setAdminAuthError('Invalid admin email. Access denied.');
+      return;
+    }
+    
+    setAdminAuthLoading(true);
+    setAdminAuthError('');
+    
+    const actionCodeSettings = {
+      url: window.location.href, // This should be /admin
+      handleCodeInApp: true,
+    };
+
+    try {
+      await sendSignInLinkToEmail(auth, adminEmailInput, actionCodeSettings);
+      window.localStorage.setItem('emailForSignIn', adminEmailInput);
+      setAdminLinkSent(true);
+    } catch (error: any) {
+      setAdminAuthError(error.message);
+    } finally {
+      setAdminAuthLoading(false);
+    }
+  };
+
   if (isAdminView) {
-    if (loading) {
+    if (loading || isAdminVerifying) {
       return (
         <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-center">
           <div className="w-16 h-16 bg-white rounded-3xl shadow-xl flex items-center justify-center mb-6 animate-pulse">
@@ -228,9 +289,82 @@ export default function App() {
       );
     }
     
-    if (!user || user.email?.toLowerCase() !== adminEmail.toLowerCase()) {
-      window.history.pushState({}, '', '/');
-      setIsAdminView(false);
+    const isActuallyAdmin = user && user.email?.toLowerCase() === adminEmail.toLowerCase();
+
+    if (!isActuallyAdmin) {
+      return (
+        <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-100 via-slate-50 to-slate-50">
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="w-full max-w-sm bg-white rounded-[3rem] p-8 pb-10 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.1)] border border-slate-100"
+          >
+            <div className="w-16 h-16 bg-slate-900 rounded-3xl flex items-center justify-center mb-8 shadow-xl mx-auto">
+              <ShieldCheck className="w-8 h-8 text-emerald-400" />
+            </div>
+            
+            <div className="text-center mb-8">
+              <h1 className="text-2xl font-black text-slate-900 tracking-tight mb-2">Admin Security</h1>
+              <p className="text-slate-400 font-medium text-sm">Verify your identity to access the control panel.</p>
+            </div>
+
+            {adminLinkSent ? (
+              <div className="text-center p-6 bg-emerald-50 rounded-3xl border border-emerald-100">
+                <Mail className="w-10 h-10 text-emerald-500 mx-auto mb-4" />
+                <h3 className="text-emerald-900 font-black mb-1">Check your Inbox</h3>
+                <p className="text-emerald-700/60 text-xs font-bold leading-relaxed">
+                  We've sent a magic link to <strong>{adminEmailInput}</strong>. Click the link to log in instantly.
+                </p>
+                <button 
+                  onClick={() => setAdminLinkSent(false)}
+                  className="mt-6 text-emerald-600 text-[10px] font-black uppercase tracking-widest hover:underline"
+                >
+                  Change Email or Retry
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={handleAdminLinkSend} className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Official Admin Email</label>
+                  <div className="relative">
+                    <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
+                    <input 
+                      type="email" 
+                      placeholder="admin@example.com"
+                      value={adminEmailInput}
+                      onChange={(e) => setAdminEmailInput(e.target.value)}
+                      className="w-full bg-slate-50 border-none rounded-2xl py-4 pl-12 pr-4 text-sm font-medium focus:ring-2 focus:ring-emerald-500/20 transition-all outline-none"
+                    />
+                  </div>
+                </div>
+
+                {adminAuthError && (
+                  <div className="bg-rose-50 border border-rose-100 p-4 rounded-2xl flex items-center gap-3">
+                    <AlertCircle className="w-4 h-4 text-rose-500 shrink-0" />
+                    <p className="text-rose-900 text-[10px] font-bold leading-tight">{adminAuthError}</p>
+                  </div>
+                )}
+
+                <button 
+                  type="submit"
+                  disabled={adminAuthLoading}
+                  className="w-full bg-slate-900 text-white py-5 rounded-[1.5rem] font-black text-sm shadow-xl shadow-slate-900/10 active:scale-95 transition-all hover:bg-slate-800 disabled:opacity-50"
+                >
+                  {adminAuthLoading ? 'Sending Link...' : 'Send Verification Link'}
+                </button>
+
+                <button 
+                  type="button"
+                  onClick={() => { window.history.pushState({}, '', '/'); setIsAdminView(false); }}
+                  className="w-full text-slate-400 py-2 font-black text-[10px] uppercase tracking-widest hover:text-slate-600 transition-all"
+                >
+                  Back to Website
+                </button>
+              </form>
+            )}
+          </motion.div>
+        </div>
+      );
     } else {
       return <AdminDashboard onBack={() => { window.history.pushState({}, '', '/'); setIsAdminView(false); }} adminEmail={adminEmail} />;
     }

@@ -13,7 +13,10 @@ import {
   GoogleAuthProvider,
   signInWithPopup,
   signInWithRedirect,
-  getRedirectResult
+  getRedirectResult,
+  sendSignInLinkToEmail,
+  isSignInWithEmailLink,
+  signInWithEmailLink
 } from 'firebase/auth';
 import { 
   initializeFirestore, 
@@ -94,6 +97,9 @@ export {
   signInWithPopup,
   signInWithRedirect,
   getRedirectResult,
+  sendSignInLinkToEmail,
+  isSignInWithEmailLink,
+  signInWithEmailLink,
   collection, 
   addDoc, 
   query, 
