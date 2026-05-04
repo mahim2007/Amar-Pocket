@@ -805,8 +805,13 @@ export default function App() {
                   </h1>
                 )}
               </div>
-              <div className="w-12 h-12 bg-slate-50 rounded-2xl flex items-center justify-center">
-                <Wallet className="w-6 h-6 text-slate-400" />
+              <div className="w-14 h-14 bg-slate-50 rounded-2xl flex items-center justify-center p-2">
+                <img 
+                  src="/logo.png" 
+                  alt="Logo" 
+                  className="w-10 h-10 object-contain" 
+                  onError={(e) => { e.currentTarget.src = "/logo.svg"; }}
+                />
               </div>
             </div>
 
