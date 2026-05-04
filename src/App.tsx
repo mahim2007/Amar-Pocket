@@ -46,8 +46,6 @@ import { twMerge } from 'tailwind-merge';
 import { 
   auth, 
   db, 
-  googleProvider, 
-  signInWithPopup, 
   signOut, 
   onAuthStateChanged, 
   createUserWithEmailAndPassword,
@@ -55,8 +53,6 @@ import {
   updateProfile,
   sendEmailVerification,
   reload,
-  signInWithRedirect,
-  getRedirectResult,
   collection, 
   addDoc, 
   query, 
@@ -100,6 +96,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [isAdding, setIsAdding] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [amount, setAmount] = useState('');
   const [category, setCategory] = useState('');
   const [type, setType] = useState<TransactionType>('expense');
@@ -147,26 +144,6 @@ export default function App() {
   useEffect(() => {
     let isMounted = true;
     
-    const checkRedirect = async () => {
-      try {
-        const result = await getRedirectResult(auth);
-        if (result && isMounted) {
-          // Successfully logged in via redirect
-          showDialog('সফল', 'Google এর মাধ্যমে সফলভাবে লগইন হয়েছে।', 'success');
-        }
-      } catch (error: any) {
-        console.error('Redirect Result Error:', error);
-        if (isMounted) {
-          if (error.code === 'auth/credential-already-in-use') {
-            setAuthError('এই অ্যাকাউন্টটি ইতিপূর্বে অন্যভাবে নিবন্ধিত হয়েছে।');
-          } else {
-            setAuthError(`লগইন ব্যর্থ: ${error.message}`);
-          }
-        }
-      }
-    };
-    checkRedirect();
-
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       if (!isMounted) return;
       
@@ -213,6 +190,7 @@ export default function App() {
         ...doc.data()
       })) as Transaction[];
       setTransactions(txs);
+      setLoading(false); // Ensure loading is false once we have any data (even from cache)
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, path);
     });
@@ -232,46 +210,6 @@ export default function App() {
   const balance = summary.income - summary.expense;
 
   // Auth Actions
-  const handleGoogleLogin = async () => {
-    setAuthLoading(true);
-    setAuthError('');
-    
-    try {
-      // Prefer popup for better user experience if supported
-      await signInWithPopup(auth, googleProvider);
-    } catch (error: any) {
-      console.error('Google Login Error:', error);
-      
-      if (error.code === 'auth/popup-blocked') {
-        showDialog(
-          'পপআপ ব্লকড', 
-          'আপনার ব্রাউজারে পপআপ ব্লক করা আছে। দয়া করে পপআপ অ্যালাউ করুন অথবা বিকল্প রিডাইরেক্ট পদ্ধতিতে চেষ্টা করুন।', 
-          'confirm',
-          () => signInWithRedirect(auth, googleProvider)
-        );
-      } else if (error.code === 'auth/cancelled-popup-request' || error.code === 'auth/popup-closed-by-user') {
-        // User closed
-      } else if (error.code === 'auth/operation-not-allowed') {
-        showDialog('কনফিগারেশন সমস্যা', 'Firebase কনসোলে Google Login মেথডটি এনাবল করা নেই।', 'error');
-      } else if (error.message.includes('403')) {
-        showDialog(
-          'অ্যাক্সেস ডিনাইড (403)', 
-          'Google Cloud Console-এ আপনার অ্যাপটি হয়তো "Testing" মোডে আছে। দয়া করে নিশ্চিত করুন আপনার ইমেইলটি "Test Users" লিস্টে আছে অথবা অ্যাপটি "Production" মোডে পাবলিশ করুন।', 
-          'error'
-        );
-      } else {
-        // Try fallback if popup fails
-        try {
-          await signInWithRedirect(auth, googleProvider);
-        } catch (redirectError) {
-          showDialog('লগইন ব্যর্থ', `Google লগইন করা সম্ভব হয়নি। (Error: ${error.code})`, 'error');
-        }
-      }
-    } finally {
-      setAuthLoading(false);
-    }
-  };
-
   const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthLoading(true);
@@ -333,28 +271,53 @@ export default function App() {
   // Transaction Actions
   const addTransaction = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!amount || !category || !user) return;
+    if (!amount || !category || !user || isSaving) return;
 
-    const path = 'transactions';
-    const newTx = {
-      amount: parseFloat(amount),
-      category,
-      type,
-      date: new Date().toISOString(),
-      time: format(new Date(), 'hh:mm a'),
-      note,
+    const txAmount = parseFloat(amount);
+    const txCategory = category;
+    const txType = type;
+    const txNote = note;
+    const now = new Date();
+    const tempId = `temp-${Date.now()}`;
+
+    // Optimistic Transaction Object
+    const optimisticTx: Transaction = {
+      id: tempId,
+      amount: txAmount,
+      category: txCategory,
+      type: txType,
+      date: now.toISOString(),
+      time: format(now, 'hh:mm a'),
+      note: txNote,
       userId: user.uid
     };
 
+    // Update state immediately
+    setTransactions(prev => [optimisticTx, ...prev]);
+    
+    // Reset form UI immediately
+    setIsAdding(false);
+    setAmount('');
+    setCategory('');
+    setNote('');
+
     try {
-      await addDoc(collection(db, path), newTx);
-      setAmount('');
-      setCategory('');
-      setNote('');
-      setIsAdding(false);
-      showDialog('সফল', 'হিসাব সফলভাবে যোগ করা হয়েছে।', 'success');
+      const path = 'transactions';
+      await addDoc(collection(db, path), {
+        amount: txAmount,
+        category: txCategory,
+        type: txType,
+        date: now.toISOString(),
+        time: format(now, 'hh:mm a'),
+        note: txNote,
+        userId: user.uid,
+        createdAt: now.toISOString()
+      });
+      // The onSnapshot listener will eventually sync the real document (with real ID)
     } catch (error) {
       console.error(error);
+      // Rollback on failure
+      setTransactions(prev => prev.filter(tx => tx.id !== tempId));
       showDialog('ত্রুটি', 'হিসাব যোগ করা সম্ভব হয়নি। ইন্টারনেটে সমস্যা হতে পারে।', 'error');
     }
   };
@@ -445,11 +408,15 @@ export default function App() {
     }, 500);
   };
 
-  if (loading) {
+  // --- Loading Screen (Only for Initial Auth Check) ---
+  if (loading && !user) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-900">
-        <Loader2 className="w-12 h-12 text-emerald-500 animate-spin mb-4" />
-        <p className="text-slate-400 font-medium">অপেক্ষা করুন...</p>
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50">
+        <div className="relative">
+          <div className="w-16 h-16 border-4 border-slate-100 border-t-emerald-500 rounded-full animate-spin" />
+          <Wallet className="w-6 h-6 text-emerald-500 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+        </div>
+        <p className="mt-6 text-slate-400 font-bold text-[10px] uppercase tracking-widest animate-pulse">লোড হচ্ছে...</p>
       </div>
     );
   }
@@ -564,27 +531,6 @@ export default function App() {
               {authLoading ? <Loader2 className="w-6 h-6 animate-spin mx-auto" /> : (authMode === 'login' ? 'অ্যাকাউন্টে প্রবেশ করুন' : 'অ্যাকাউন্ট তৈরি করুন')}
             </button>
           </form>
-
-          <div className="relative mb-8">
-            <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-100"></div></div>
-            <div className="relative flex justify-center text-[10px]"><span className="bg-white px-4 text-slate-400 font-black uppercase tracking-widest leading-none">অথবা সোশ্যাল লগইন</span></div>
-          </div>
-
-          <button 
-            onClick={handleGoogleLogin}
-            disabled={authLoading}
-            className="w-full flex items-center justify-center gap-3 bg-white border-2 border-slate-100 text-slate-700 py-4.5 rounded-2xl font-black text-sm hover:bg-slate-50 hover:border-slate-200 transition-all active:scale-[0.98] shadow-sm group"
-          >
-            <div className="bg-slate-50 p-1.5 rounded-xl group-hover:bg-white transition-colors">
-              <svg width="18" height="18" viewBox="0 0 24 24" className="flex-shrink-0">
-                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                <path fill="#FBBC05" d="M5.84 14.1c-.22-.66-.35-1.36-.35-2.1s.13-1.44.35-2.1V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l3.66-2.84z"/>
-                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.66l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
-              </svg>
-            </div>
-            Google অ্যাকাউন্ট দিয়ে লগইন করুন
-          </button>
         </motion.div>
       </div>
     );
@@ -754,7 +700,22 @@ export default function App() {
 
           <div className="space-y-3">
             <AnimatePresence initial={false}>
-              {transactions.length === 0 ? (
+              {loading ? (
+                <div className="space-y-3">
+                  {[1, 2, 3].map(i => (
+                    <div key={i} className="bg-white p-5 rounded-[2rem] border border-slate-50 flex items-center justify-between animate-pulse">
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 bg-slate-50 rounded-[1.25rem]" />
+                        <div className="space-y-2">
+                          <div className="h-3 w-20 bg-slate-50 rounded" />
+                          <div className="h-2 w-12 bg-slate-50 rounded" />
+                        </div>
+                      </div>
+                      <div className="h-4 w-16 bg-slate-50 rounded" />
+                    </div>
+                  ))}
+                </div>
+              ) : transactions.length === 0 ? (
                 <div className="text-center py-20 bg-white rounded-[2.5rem] border border-dashed border-slate-200">
                    <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-200">
                       <History className="w-8 h-8" />
@@ -813,16 +774,14 @@ export default function App() {
       </main>
 
       {/* Floating Action Button */}
-      <div className="fixed bottom-8 left-0 right-0 px-6 z-50 pointer-events-none">
-        <div className="max-w-md mx-auto flex justify-center pointer-events-auto">
-          <button 
-            onClick={() => setIsAdding(true)}
-            className="flex items-center gap-3 bg-slate-900 text-white px-8 py-5 rounded-[2.5rem] font-black text-base shadow-2xl shadow-slate-900/40 active:scale-95 transition-all"
-          >
-            <PlusCircle className="w-5 h-5 text-emerald-400" />
-            হিসাব যোগ করুন
-          </button>
-        </div>
+      <div className="fixed bottom-10 right-6 z-50">
+        <button 
+          onClick={() => setIsAdding(true)}
+          className="w-16 h-16 flex items-center justify-center bg-slate-900 text-white rounded-full font-black shadow-[0_20px_50px_rgba(0,0,0,0.3)] active:scale-90 transition-all hover:bg-emerald-600 hover:shadow-emerald-500/30 group"
+          title="হিসাব যোগ করুন"
+        >
+          <Plus className="w-8 h-8 group-hover:rotate-90 transition-transform duration-300" />
+        </button>
       </div>
 
       {/* --- ADD MODAL --- */}
@@ -935,14 +894,14 @@ export default function App() {
 
                 <button 
                   type="submit"
-                  disabled={!amount || !category}
+                  disabled={!amount || !category || isSaving}
                   className={cn(
-                    "w-full py-5 rounded-[2rem] text-slate-950 font-black text-lg transition-all active:scale-[0.98] mt-4 flex items-center justify-center gap-3 disabled:opacity-30",
+                    "w-full py-5 rounded-[2rem] text-slate-950 font-black text-lg transition-all active:scale-[0.98] mt-4 flex items-center justify-center gap-3 disabled:opacity-50",
                     type === 'income' ? "bg-emerald-500 shadow-xl shadow-emerald-500/20" : "bg-emerald-500 shadow-xl shadow-emerald-500/20"
                   )}
                 >
-                  <ArrowRight className="w-6 h-6" />
-                  সেভ করুন
+                  {isSaving ? <Loader2 className="w-6 h-6 animate-spin" /> : <ArrowRight className="w-6 h-6" />}
+                  {isSaving ? 'সেভ হচ্ছে...' : 'সেভ করুন'}
                 </button>
               </form>
             </motion.div>
