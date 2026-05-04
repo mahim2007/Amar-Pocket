@@ -36,11 +36,13 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { format, subDays, isAfter } from 'date-fns';
-import { bn } from 'date-fns/locale';
+import { bn, enUS } from 'date-fns/locale';
 import { jsPDF } from "jspdf";
 import html2canvas from 'html2canvas';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+
+import { translations, type Language } from './translations';
 
 // Firebase imports
 import { 
@@ -90,12 +92,6 @@ interface Transaction {
   createdAt: string;
 }
 
-// --- Constants ---
-const CATEGORIES = {
-  income: ['ব্যাবসা', 'বেতন', 'বোনাস', 'উপহার', 'বিনিয়োগ', 'অন্যান্য'],
-  expense: ['খাবার', 'যাতায়াত', 'ব্যাবসা', 'বাজার', 'বিল', 'মেডিকেল', 'কেনাকাটা', 'বিনোদন', 'অন্যান্য']
-};
-
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -125,6 +121,19 @@ export default function App() {
   const [newDisplayName, setNewDisplayName] = useState('');
   const [newPhotoURL, setNewPhotoURL] = useState('');
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [lang, setLang] = useState<Language>(() => {
+    const saved = localStorage.getItem('pocket_lang');
+    return (saved as Language) || 'bn';
+  });
+
+  const t = translations[lang];
+  const locale = lang === 'bn' ? bn : enUS;
+
+  useEffect(() => {
+    localStorage.setItem('pocket_lang', lang);
+  }, [lang]);
+
+  const CATEGORIES = t.categories;
 
   // Custom UI Dialog State
   const [dialog, setDialog] = useState<{
@@ -174,15 +183,15 @@ export default function App() {
         const result = await getRedirectResult(auth);
         if (result && isMounted) {
           // Successfully logged in via redirect
-          showDialog('সফল', 'Google এর মাধ্যমে সফলভাবে লগইন হয়েছে।', 'success');
+          showDialog(t.success, t.googleLoginSuccess, 'success');
         }
       } catch (error: any) {
         console.error('Redirect Result Error:', error);
         if (isMounted) {
           if (error.code === 'auth/credential-already-in-use') {
-            setAuthError('এই অ্যাকাউন্টটি ইতিপূর্বে অন্যভাবে নিবন্ধিত হয়েছে।');
+            setAuthError(t.accountAlreadyRegistered);
           } else {
-            setAuthError(`লগইন ব্যর্থ: ${error.message}`);
+            setAuthError(t.loginFailed + error.message);
           }
         }
       }
@@ -274,21 +283,21 @@ export default function App() {
       
       if (error.code === 'auth/popup-blocked') {
         showDialog(
-          'পপআপ ব্লকড', 
-          'আপনার ব্রাউজারে পপআপ ব্লক করা আছে। বিকল্প পদ্ধতিতে চেষ্টা করতে চান?', 
+          t.popupBlockedTitle, 
+          t.popupBlockedMessage, 
           'confirm',
           () => signInWithRedirect(auth, googleProvider)
         );
       } else if (error.code === 'auth/cancelled-popup-request' || error.code === 'auth/popup-closed-by-user') {
         // User closed
       } else if (error.code === 'auth/operation-not-allowed') {
-        showDialog('কনফিগারেশন সমস্যা', 'Firebase কনসোলে Google Login মেথডটি এনাবল করা নেই।', 'error');
+        showDialog(t.configProblemTitle, t.configProblemMessage, 'error');
       } else {
         // Try fallback if popup fails
         try {
           await signInWithRedirect(auth, googleProvider);
         } catch (redirectError) {
-          showDialog('লগইন ব্যর্থ', `Google লগইন করা সম্ভব হয়নি। (Error: ${error.code})`, 'error');
+          showDialog(t.login + ' ' + t.error, t.googleLoginFailed + ` (Error: ${error.code})`, 'error');
         }
       }
     } finally {
@@ -307,7 +316,7 @@ export default function App() {
         await updateProfile(userCredential.user, { displayName: fullName });
         await sendEmailVerification(userCredential.user);
         setIsVerifying(true);
-        showDialog('সফল', 'অ্যাকাউন্ট তৈরি হয়েছে! আপনার ইমেইল যাচাইয়ের জন্য একটি লিংক পাঠানো হয়েছে।', 'success');
+        showDialog(t.success, t.accountCreatedVerify, 'success');
       } else {
         const userCredential = await signInWithEmailAndPassword(auth, email, password);
         if (!userCredential.user.emailVerified) {
@@ -317,10 +326,10 @@ export default function App() {
       }
     } catch (error: any) {
       console.error('Auth Error:', error);
-      if (error.code === 'auth/email-already-in-use') setAuthError('এই ইমেইলটি ইতিপূর্বে ব্যবহার করা হয়েছে।');
-      else if (error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') setAuthError('পাসওয়ার্ড বা ইমেইল সঠিক নয়।');
-      else if (error.code === 'auth/too-many-requests') setAuthError('অতিরিক্ত চেষ্টার কারণে অ্যাকাউন্ট সাময়িকভাবে বন্ধ। পরে চেষ্টা করুন।');
-      else setAuthError('লগইন ব্যর্থ হয়েছে। তথ্য যাচাই করুন।');
+      if (error.code === 'auth/email-already-in-use') setAuthError(t.emailInUse);
+      else if (error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') setAuthError(t.wrongCredentials);
+      else if (error.code === 'auth/too-many-requests') setAuthError(t.tooManyAttempts);
+      else setAuthError(t.error + '. ' + t.checkInfo);
     } finally {
       setAuthLoading(false);
     }
@@ -334,9 +343,9 @@ export default function App() {
       if (auth.currentUser.emailVerified) {
         setUser({ ...auth.currentUser });
         setIsVerifying(false);
-        showDialog('সফল', 'ইমেইল সফলভাবে যাচাই করা হয়েছে!', 'success');
+        showDialog(t.success, t.emailVerified, 'success');
       } else {
-        showDialog('অপেক্ষমান', 'আপনার ইমেইল এখনও যাচাই করা হয়নি। দয়া করে ইনবক্স চেক করুন।', 'alert');
+        showDialog(t.wait, t.emailNotVerified, 'alert');
       }
     } catch (error) {
       console.error(error);
@@ -347,8 +356,8 @@ export default function App() {
 
   const handleLogout = async () => {
     showDialog(
-      'লগ-আউট নিশ্চিত করুন', 
-      'আপনি কি আপনার অ্যাকাউন্ট থেকে লগ-আউট করতে চান?', 
+      t.logoutConfirm, 
+      t.logoutMessage, 
       'confirm', 
       () => signOut(auth)
     );
@@ -405,22 +414,22 @@ export default function App() {
       console.error(error);
       // Rollback on failure
       setTransactions(prev => prev.filter(tx => tx.id !== tempId));
-      showDialog('ত্রুটি', 'হিসাব যোগ করা সম্ভব হয়নি। ইন্টারনেটে সমস্যা হতে পারে।', 'error');
+      showDialog(t.error, t.addTransactionFailed, 'error');
     }
   };
 
   const deleteTransaction = async (id: string) => {
     showDialog(
-      'রেকর্ড মুছে ফেলুন',
-      'আপনি কি নিশ্চিতভাবে এই রেকর্ডটি মুছে ফেলতে চান?',
+      t.deleteConfirm,
+      t.deleteMessage,
       'confirm',
       async () => {
         try {
           await deleteDoc(doc(db, 'transactions', id));
-          showDialog('সফল', 'রেকর্ডটি সফলভাবে মুছে ফেলা হয়েছে।', 'success');
+          showDialog(t.success, t.recordDeleted, 'success');
         } catch (error) {
           console.error(error);
-          showDialog('ত্রুটি', 'রেকর্ডটি মুছে ফেলা সম্ভব হয়নি।', 'error');
+          showDialog(t.error, t.recordDeleteFailed, 'error');
         }
       }
     );
@@ -436,9 +445,9 @@ export default function App() {
         photoURL: newPhotoURL.trim() || user.photoURL
       });
       setIsProfileOpen(false);
-      showDialog('সফল', 'প্রোফাইল সফলভাবে আপডেট হয়েছে!', 'success');
+      showDialog(t.success, t.profileUpdated, 'success');
     } catch (error) {
-      showDialog('ত্রুটি', 'আপডেট করা সম্ভব হয়নি। আবার চেষ্টা করুন।', 'error');
+      showDialog(t.error, t.updateFailed, 'error');
     } finally {
       setAuthLoading(false);
     }
@@ -449,7 +458,7 @@ export default function App() {
     if (!file) return;
 
     if (file.size > 2 * 1024 * 1024) {
-      showDialog('বড় ফাইল', 'ছবিটি ২ এমবি এর বেশি হতে পারবে না।', 'error');
+      showDialog(t.largeFileTitle, t.largeFileMessage, 'error');
       return;
     }
 
@@ -486,10 +495,10 @@ export default function App() {
         const imgHeight = (canvas.height * imgWidth) / canvas.width;
         
         pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, imgHeight, undefined, 'FAST');
-        pdf.save(`${user?.displayName || 'pocket'}_statement_${days === 'all' ? 'total' : days + 'days'}.pdf`);
+        pdf.save(`${user?.displayName || 'pocket'}_statement_${days === 'all' ? (lang === 'bn' ? 'total' : 'total') : days + 'days'}.pdf`);
       } catch (err) {
         console.error('PDF Export failed', err);
-        showDialog('ত্রুটি', 'পিডিএফ এক্সপোর্ট করা সম্ভব হচ্ছে না।', 'error');
+        showDialog(t.error, t.exportError, 'error');
       } finally {
         setIsExporting(false);
       }
@@ -502,9 +511,9 @@ export default function App() {
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50">
         <div className="relative">
           <div className="w-16 h-16 border-4 border-slate-100 border-t-emerald-500 rounded-full animate-spin" />
-          <img src="/logo.png" alt="Logo" className="w-10 h-10 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" onError={(e) => (e.currentTarget.style.display='none')} />
+          <img src="/logo.svg" alt="Logo" className="w-10 h-10 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
         </div>
-        <p className="mt-6 text-slate-400 font-bold text-[10px] uppercase tracking-widest animate-pulse">লোড হচ্ছে...</p>
+        <p className="mt-6 text-slate-400 font-bold text-[10px] uppercase tracking-widest animate-pulse">{t.loading}</p>
       </div>
     );
   }
@@ -523,10 +532,10 @@ export default function App() {
         >
           <div className="text-center mb-10">
             <div className="bg-white w-20 h-20 rounded-[2.2rem] flex items-center justify-center mx-auto mb-5 shadow-2xl shadow-emerald-500/10 border-2 border-slate-50">
-              <img src="/logo.png" alt="Logo" className="w-14 h-14 object-contain" onError={(e) => (e.currentTarget.style.display='none')} />
+              <img src="/logo.svg" alt="Logo" className="w-14 h-14 object-contain" />
             </div>
-            <h1 className="text-3xl font-black text-slate-900 mb-1 tracking-tight">আমার পকেট</h1>
-            <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em] leading-none">Smart Expense Tracker</p>
+            <h1 className="text-3xl font-black text-slate-900 mb-1 tracking-tight">{t.appName}</h1>
+            <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em] leading-none">{t.tagline}</p>
           </div>
 
           <div className="flex bg-slate-100/50 rounded-2xl p-1.5 mb-8 border border-slate-100 shadow-inner">
@@ -537,7 +546,7 @@ export default function App() {
                 authMode === 'login' ? "bg-white text-emerald-600 shadow-sm" : "text-slate-400 hover:text-slate-600 font-bold"
               )}
             >
-              প্রবেশ
+              {t.login}
             </button>
             <button 
               onClick={() => { setAuthMode('signup'); setAuthError(''); }}
@@ -546,7 +555,7 @@ export default function App() {
                 authMode === 'signup' ? "bg-white text-emerald-600 shadow-sm" : "text-slate-400 hover:text-slate-600 font-bold"
               )}
             >
-              নিবন্ধন
+              {t.signup}
             </button>
           </div>
 
@@ -563,7 +572,7 @@ export default function App() {
                     <UserIcon className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-emerald-500 transition-colors" />
                     <input 
                       type="text" 
-                      placeholder="আপনার নাম"
+                      placeholder={t.namePlaceholder}
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
                       className="w-full pl-14 pr-6 py-5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-4 focus:ring-emerald-500/10 focus:bg-white text-slate-900 placeholder:text-slate-400 transition-all font-bold text-base"
@@ -573,24 +582,24 @@ export default function App() {
                 </motion.div>
               )}
             </AnimatePresence>
-
+ 
             <div className="relative group">
               <Mail className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-emerald-500 transition-colors" />
               <input 
                 type="email" 
-                placeholder="ইমেইল অ্যাড্রেস"
+                placeholder={t.emailPlaceholder}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full pl-14 pr-6 py-5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-4 focus:ring-emerald-500/10 focus:bg-white text-slate-900 placeholder:text-slate-400 transition-all font-bold text-base"
                 required
               />
             </div>
-
+ 
             <div className="relative group">
               <Lock className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-emerald-500 transition-colors" />
               <input 
                 type="password" 
-                placeholder="পাসওয়ার্ড"
+                placeholder={t.passwordPlaceholder}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full pl-14 pr-6 py-5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-4 focus:ring-emerald-500/10 focus:bg-white text-slate-900 placeholder:text-slate-400 transition-all font-bold text-base"
@@ -614,13 +623,13 @@ export default function App() {
               type="submit"
               className="w-full bg-emerald-500 hover:bg-emerald-600 text-white py-5 rounded-2xl font-black text-lg transition-all active:scale-[0.98] shadow-xl shadow-emerald-500/20 disabled:opacity-50 mt-2"
             >
-              {authLoading ? <Loader2 className="w-6 h-6 animate-spin mx-auto" /> : (authMode === 'login' ? 'শুরু করুন' : 'নিবন্ধন করুন')}
+              {authLoading ? <Loader2 className="w-6 h-6 animate-spin mx-auto" /> : (authMode === 'login' ? t.start : t.register)}
             </button>
           </form>
 
           <div className="relative mb-6">
             <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-100"></div></div>
-            <div className="relative flex justify-center text-[10px]"><span className="bg-white px-4 text-slate-300 font-black uppercase tracking-[0.2em] leading-none">অথবা সোশ্যাল</span></div>
+            <div className="relative flex justify-center text-[10px]"><span className="bg-white px-4 text-slate-300 font-black uppercase tracking-[0.2em] leading-none">{t.orSocial}</span></div>
           </div>
 
           <button 
@@ -634,7 +643,7 @@ export default function App() {
               <path fill="#FBBC05" d="M5.84 14.1c-.22-.66-.35-1.36-.35-2.1s.13-1.44.35-2.1V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l3.66-2.84z"/>
               <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.66l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.47 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
             </svg>
-            Google অ্যাকাউন্ট দিয়ে লগইন
+            {t.googleLogin}
           </button>
         </motion.div>
       </div>
@@ -656,9 +665,9 @@ export default function App() {
             <Mail className="w-10 h-10" />
           </div>
           
-          <h2 className="text-2xl font-black text-slate-900 mb-4 tracking-tight">ইমেইল যাচাই করুন</h2>
+          <h2 className="text-2xl font-black text-slate-900 mb-4 tracking-tight">{t.verifyEmail}</h2>
           <p className="text-slate-500 text-sm font-medium mb-10 leading-relaxed px-4">
-            আপনার <b>{user.email}</b> ঠিকানায় একটি ভেরিফিকেশন লিংক পাঠানো হয়েছে। দয়া করে ইনবক্স চেক করে লিংকে ক্লিক করুন।
+            {t.verifyEmailSent.replace('{email}', user.email || '')}
           </p>
           
           <div className="space-y-4">
@@ -668,19 +677,19 @@ export default function App() {
               className="w-full bg-slate-900 text-white py-5 rounded-2xl font-black text-sm shadow-xl shadow-slate-900/20 active:scale-[0.98] transition-all flex items-center justify-center gap-3"
             >
               {authLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <LogIn className="w-5 h-5" />}
-              লিংকে ক্লিক করেছি
+              {t.clickedLink}
             </button>
             
             <button 
               onClick={() => {
                 if (auth.currentUser) {
                   sendEmailVerification(auth.currentUser);
-                  showDialog('সাফল্য', 'ভেরিফিকেশন ইমেইল পুনরায় পাঠানো হয়েছে।', 'success');
+                  showDialog(t.success, t.verificationSent, 'success');
                 }
               }}
               className="w-full bg-slate-50 text-slate-500 py-4.5 rounded-2xl font-black text-xs hover:bg-slate-100 transition-all border border-slate-100"
             >
-              ইমেইল আবার পাঠান
+              {t.resendEmail}
             </button>
             
             <button 
@@ -690,7 +699,7 @@ export default function App() {
               }}
               className="w-full text-slate-400 font-bold text-xs pt-4 hover:text-slate-600 transition-colors"
             >
-              অন্য অ্যাকাউন্ট ব্যবহার করুন
+              {t.useOtherAccount}
             </button>
           </div>
         </motion.div>
@@ -718,8 +727,8 @@ export default function App() {
                )}
             </button>
             <div onClick={() => setIsProfileOpen(true)} className="cursor-pointer">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">শুভ দিন,</p>
-              <h2 className="font-bold text-sm text-slate-800">{user.displayName?.split(' ')[0] || 'ইউজার'}</h2>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">{t.goodDay}</p>
+              <h2 className="font-bold text-sm text-slate-800">{user.displayName?.split(' ')[0] || t.user}</h2>
             </div>
           </div>
           <button 
@@ -742,7 +751,7 @@ export default function App() {
           >
             <div className="flex justify-between items-start mb-6">
               <div>
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2">মোট ব্যালেন্স</p>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2">{t.totalBalance}</p>
                 {loading ? (
                   <div className="h-10 w-32 bg-slate-100 animate-pulse rounded-xl" />
                 ) : (
@@ -761,7 +770,7 @@ export default function App() {
               <div className="space-y-1">
                 <div className="flex items-center gap-1.5 text-emerald-600">
                   <ArrowDownCircle className="w-4 h-4 font-bold" />
-                  <span className="text-[10px] font-black uppercase tracking-wider">আয়</span>
+                  <span className="text-[10px] font-black uppercase tracking-wider">{t.income}</span>
                 </div>
                 {loading ? (
                   <div className="h-6 w-20 bg-slate-50 animate-pulse rounded-lg" />
@@ -772,7 +781,7 @@ export default function App() {
               <div className="space-y-1 border-l border-slate-100 pl-4">
                 <div className="flex items-center gap-1.5 text-rose-500">
                   <ArrowUpCircle className="w-4 h-4 font-bold" />
-                  <span className="text-[10px] font-black uppercase tracking-wider">ব্যয়</span>
+                  <span className="text-[10px] font-black uppercase tracking-wider">{t.expense}</span>
                 </div>
                 {loading ? (
                   <div className="h-6 w-20 bg-slate-50 animate-pulse rounded-lg" />
@@ -788,10 +797,10 @@ export default function App() {
         <div className="overflow-x-auto no-scrollbar -mx-2 px-2">
           <div className="flex gap-3 pb-2">
             {[
-              { l: '১ দিন', d: 1 },
-              { l: '৭ দিন', d: 7 },
-              { l: '৩০ দিন', d: 30 },
-              { l: 'আজীবন', d: 'all' }
+              { l: t.oneDay, d: 1 },
+              { l: t.sevenDays, d: 7 },
+              { l: t.thirtyDays, d: 30 },
+              { l: t.forever, d: 'all' }
             ].map((opt) => (
               <button 
                 key={opt.l}
@@ -800,7 +809,7 @@ export default function App() {
                 className="flex items-center gap-2 px-6 py-3 bg-white hover:bg-slate-900 hover:text-white rounded-2xl text-[10px] font-black transition-all border border-slate-100 shadow-sm whitespace-nowrap group disabled:opacity-50"
               >
                 {isExporting && exportDays === opt.d ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3 text-emerald-500 group-hover:text-white" />}
-                {opt.l} রিপোর্ট
+                {opt.l} {t.report}
               </button>
             ))}
           </div>
@@ -809,9 +818,9 @@ export default function App() {
         {/* Recent Transactions List */}
         <section className="space-y-4">
           <div className="flex justify-between items-end px-1">
-            <h3 className="font-black text-lg text-slate-800 tracking-tight">রেকর্ডসমূহ</h3>
+            <h3 className="font-black text-lg text-slate-800 tracking-tight">{t.records}</h3>
             <div className="flex items-center gap-1 bg-white px-3 py-1 rounded-full border border-slate-100 text-[9px] font-black text-slate-400 uppercase tracking-widest shadow-sm">
-               সাম্প্রতিক তথ্য
+               {t.recentInfo}
             </div>
           </div>
 
@@ -837,7 +846,7 @@ export default function App() {
                    <div className="w-20 h-20 bg-slate-50 rounded-[2.5rem] flex items-center justify-center mx-auto text-slate-200">
                       <History className="w-8 h-8" />
                    </div>
-                   <p className="text-slate-400 font-bold text-xs uppercase tracking-widest">রেকর্ড পাওয়া যায়নি</p>
+                   <p className="text-slate-400 font-bold text-xs uppercase tracking-widest">{t.noRecords}</p>
                 </div>
               ) : (
                 transactions.map((tx, i) => (
@@ -858,7 +867,7 @@ export default function App() {
                       <div>
                         <h4 className="font-black text-sm text-slate-800 mb-0.5">{tx.category}</h4>
                         <div className="flex items-center gap-2 text-[9px] text-slate-400 font-bold uppercase tracking-[0.05em]">
-                          <span>{format(new Date(tx.date), 'dd MMM', { locale: bn })}</span>
+                          <span>{format(new Date(tx.date), 'dd MMM', { locale })}</span>
                           <span className="w-1 h-1 bg-slate-200 rounded-full" />
                           <span>{tx.time}</span>
                         </div>
@@ -895,7 +904,7 @@ export default function App() {
         <button 
           onClick={() => setIsAdding(true)}
           className="w-16 h-16 flex items-center justify-center bg-slate-900 text-white rounded-full font-black shadow-[0_20px_50px_rgba(0,0,0,0.3)] active:scale-90 transition-all hover:bg-emerald-600 hover:shadow-emerald-500/30 group"
-          title="হিসাব যোগ করুন"
+          title={t.addRecord}
         >
           <Plus className="w-8 h-8 group-hover:rotate-90 transition-transform duration-300" />
         </button>
@@ -922,8 +931,8 @@ export default function App() {
             >
               <div className="flex justify-between items-center mb-8">
                 <div>
-                  <h3 className="text-2xl font-black text-slate-900">নতুন এন্ট্রি</h3>
-                  <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mt-1">সঠিক তথ্য দিয়ে পূরণ করুন</p>
+                  <h3 className="text-2xl font-black text-slate-900">{t.newEntry}</h3>
+                  <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mt-1">{t.correctInfo}</p>
                 </div>
                 <button 
                   onClick={() => setIsAdding(false)} 
@@ -944,7 +953,7 @@ export default function App() {
                       type === 'expense' ? "bg-white text-rose-600 shadow-xl border border-slate-100" : "text-slate-500"
                     )}
                   >
-                    <ArrowUpCircle className="w-4 h-4" /> ব্যয়
+                  <ArrowUpCircle className="w-4 h-4" /> {t.expense}
                   </button>
                   <button
                     type="button"
@@ -954,13 +963,13 @@ export default function App() {
                       type === 'income' ? "bg-white text-emerald-600 shadow-xl border border-slate-100" : "text-slate-500"
                     )}
                   >
-                    <ArrowDownCircle className="w-4 h-4" /> আয়
+                    <ArrowDownCircle className="w-4 h-4" /> {t.income}
                   </button>
                 </div>
 
                 {/* Amount */}
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">টাকার পরিমাণ</label>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">{t.amount}</label>
                   <div className="relative">
                     <span className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-300 text-2xl font-black">৳</span>
                     <input 
@@ -977,7 +986,7 @@ export default function App() {
 
                 {/* Category */}
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">খাতা বা বিষয়</label>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">{t.categoryLabel}</label>
                   <div className="grid grid-cols-3 gap-3">
                     {CATEGORIES[type].map(cat => (
                       <button
@@ -999,12 +1008,12 @@ export default function App() {
 
                 {/* Note */}
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">নোট (অপশনাল)</label>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">{t.noteOptional}</label>
                   <input 
                     type="text" 
                     value={note}
                     onChange={(e) => setNote(e.target.value)}
-                    placeholder="নোট লিখে রাখুন..."
+                    placeholder={t.notePlaceholder}
                     className="w-full bg-slate-50 border border-slate-100 rounded-2xl py-4 px-6 outline-none focus:bg-white transition-all text-sm font-medium"
                   />
                 </div>
@@ -1018,7 +1027,7 @@ export default function App() {
                   )}
                 >
                   {isSaving ? <Loader2 className="w-6 h-6 animate-spin" /> : <ArrowRight className="w-6 h-6" />}
-                  {isSaving ? 'সেভ হচ্ছে...' : 'সেভ করুন'}
+                  {isSaving ? t.saving : t.save}
                 </button>
               </form>
             </motion.div>
@@ -1072,57 +1081,90 @@ export default function App() {
                     <Plus className="w-8 h-8 text-white" />
                   </div>
                 </button>
-                <p className="text-[9px] font-black text-emerald-500 uppercase tracking-widest mb-4">ছবি পরিবর্তন করুন</p>
+                <p className="text-[9px] font-black text-emerald-500 uppercase tracking-widest mb-4">{t.changePhoto}</p>
                 
-                <h3 className="text-xl font-black text-slate-900 mb-1">{user.displayName || 'ইউজার'}</h3>
+                <h3 className="text-xl font-black text-slate-900 mb-1">{user.displayName || t.user}</h3>
                 <p className="text-slate-400 text-xs font-medium mb-8">{user.email}</p>
-
+ 
                 <form onSubmit={handleUpdateProfile} className="space-y-4 text-left">
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">আপনার নাম</label>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">{t.namePlaceholder}</label>
                     <input 
                       type="text" 
                       value={newDisplayName}
                       onChange={(e) => setNewDisplayName(e.target.value)}
-                      placeholder="নতুন নাম লিখুন"
+                      placeholder={t.namePlaceholder}
                       className="w-full bg-slate-50 border border-slate-100 rounded-2xl py-4 px-6 outline-none focus:bg-white focus:ring-4 focus:ring-emerald-500/10 transition-all font-bold text-slate-800"
                       required
                     />
                   </div>
 
+                  {/* Language Selector */}
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">{t.language}</label>
+                    <div className="flex bg-slate-100 rounded-xl p-1 gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setLang('bn')}
+                        className={cn(
+                          "flex-1 py-3 rounded-lg text-[10px] font-black transition-all uppercase tracking-widest",
+                          lang === 'bn' ? "bg-white text-emerald-600 shadow-sm" : "text-slate-400 hover:text-slate-600"
+                        )}
+                      >
+                        বাংলা
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setLang('en')}
+                        className={cn(
+                          "flex-1 py-3 rounded-lg text-[10px] font-black transition-all uppercase tracking-widest",
+                          lang === 'en' ? "bg-white text-emerald-600 shadow-sm" : "text-slate-400 hover:text-slate-600"
+                        )}
+                      >
+                        English
+                      </button>
+                    </div>
+                  </div>
+ 
                   <div className="pt-2 flex gap-3">
                     <button 
                       type="button"
                       onClick={() => setIsProfileOpen(false)}
                       className="flex-1 py-4 rounded-2xl bg-slate-100 text-slate-500 font-bold text-sm hover:bg-slate-200 transition-all"
                     >
-                      বাতিল
+                      {t.cancel}
                     </button>
                     <button 
                       disabled={authLoading || (!newDisplayName.trim() && !newPhotoURL.trim()) || (newDisplayName === user.displayName && newPhotoURL === user.photoURL)}
                       type="submit"
                       className="flex-[2] bg-emerald-500 text-slate-950 py-4 rounded-2xl font-black text-sm shadow-lg shadow-emerald-500/20 active:scale-95 disabled:opacity-50 transition-all"
                     >
-                      {authLoading ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : 'আপডেট করুন'}
+                      {authLoading ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : t.update}
                     </button>
                   </div>
                 </form>
-
+ 
                 <div className="mt-8 space-y-4">
-                  {deferredPrompt && (
+                  {deferredPrompt ? (
                     <button 
                       onClick={installApp}
                       className="w-full bg-emerald-500 text-slate-950 py-4 rounded-2xl font-black text-sm shadow-lg shadow-emerald-500/20 active:scale-95 transition-all flex items-center justify-center gap-3"
                     >
-                      <Download className="w-5 h-5" /> অ্যাপ ইন্সটল করুন
+                      <Download className="w-5 h-5" /> {t.installApp}
                     </button>
+                  ) : (
+                    <div className="bg-slate-50 p-4 rounded-2xl border border-dashed border-slate-200">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center leading-relaxed">
+                        {t.pwaNote}
+                      </p>
+                    </div>
                   )}
-
+ 
                   <button 
                     onClick={() => { setIsProfileOpen(false); handleLogout(); }}
                     className="w-full py-4 bg-rose-50 text-rose-600 rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-rose-100 transition-all"
                   >
-                    <LogOut className="w-3 h-3" /> লগ-আউট করুন
+                    <LogOut className="w-3 h-3" /> {t.logout}
                   </button>
                 </div>
               </div>
@@ -1175,7 +1217,7 @@ export default function App() {
                     onClick={closeDialog}
                     className="flex-1 py-4.5 rounded-2xl bg-slate-50 text-slate-400 font-black text-xs hover:bg-slate-100 transition-all border border-slate-100"
                   >
-                    না
+                    {t.no}
                   </button>
                 )}
                 <button 
@@ -1190,7 +1232,7 @@ export default function App() {
                     "bg-emerald-500 text-slate-950 shadow-emerald-500/10"
                   )}
                 >
-                  {dialog.type === 'confirm' ? 'হ্যাঁ, নিশ্চিত' : 'ঠিক আছে'}
+                  {dialog.type === 'confirm' ? t.yesConfirm : t.ok}
                 </button>
               </div>
             </motion.div>
@@ -1213,15 +1255,15 @@ export default function App() {
           <div className="pb-12 mb-12" style={{ borderBottom: '2px solid #0f172a' }}>
             <div className="flex justify-between items-start">
               <div className="flex items-center gap-6">
-                <img src="/logo.png" alt="Logo" className="w-16 h-16 object-contain" onError={(e) => (e.currentTarget.style.display='none')} />
+                <img src="/logo.svg" alt="Logo" className="w-16 h-16 object-contain" />
                 <div>
-                  <h1 className="text-4xl font-black tracking-tight" style={{ color: '#0f172a' }}>আমার পকেট</h1>
-                  <p className="text-sm font-bold uppercase tracking-[0.2em]" style={{ color: '#64748b' }}>Statement of Account</p>
+                  <h1 className="text-4xl font-black tracking-tight" style={{ color: '#0f172a' }}>{t.appName}</h1>
+                  <p className="text-sm font-bold uppercase tracking-[0.2em]" style={{ color: '#64748b' }}>{t.statementOfAccount}</p>
                 </div>
               </div>
               <div className="text-right">
-                <p className="text-[10px] font-black uppercase tracking-widest mb-1" style={{ color: '#94a3b8' }}>প্রস্তুতকাল</p>
-                <p className="text-sm font-bold" style={{ color: '#0f172a' }}>{format(new Date(), 'dd MMMM, yyyy (hh:mm a)', { locale: bn })}</p>
+                <p className="text-[10px] font-black uppercase tracking-widest mb-1" style={{ color: '#94a3b8' }}>{t.preparedAt}</p>
+                <p className="text-sm font-bold" style={{ color: '#0f172a' }}>{format(new Date(), 'dd MMMM, yyyy (hh:mm a)', { locale })}</p>
               </div>
             </div>
           </div>
@@ -1230,32 +1272,32 @@ export default function App() {
           <div className="grid grid-cols-2 gap-16 mb-16">
             <div className="space-y-6">
               <div>
-                <p className="text-[10px] font-black uppercase tracking-widest mb-2" style={{ color: '#94a3b8' }}>হিসাবধারী</p>
-                <h2 className="text-xl font-black" style={{ color: '#1e293b' }}>{user.displayName || 'ইউজার'}</h2>
+                <p className="text-[10px] font-black uppercase tracking-widest mb-2" style={{ color: '#94a3b8' }}>{t.accountHolder}</p>
+                <h2 className="text-xl font-black" style={{ color: '#1e293b' }}>{user.displayName || t.user}</h2>
                 <p className="text-sm font-medium" style={{ color: '#64748b' }}>{user.email}</p>
               </div>
               <div className="pt-4" style={{ borderTop: '1px solid #f1f5f9' }}>
-                <p className="text-[10px] font-black uppercase tracking-widest mb-2" style={{ color: '#94a3b8' }}>রিপোর্টের সময়কাল</p>
+                <p className="text-[10px] font-black uppercase tracking-widest mb-2" style={{ color: '#94a3b8' }}>{t.reportPeriod}</p>
                 <p className="text-sm font-bold" style={{ color: '#334155' }}>
-                  {exportDays === 'all' ? 'শুরু থেকে আজ পর্যন্ত' : exportDays === 1 ? 'আজকের পূর্ণাঙ্গ তথ্য' : `বিগত ${exportDays} দিনের লেনদেন`}
+                  {exportDays === 'all' ? t.allTime : exportDays === 1 ? t.today : t.lastDays.replace('{days}', exportDays.toString())}
                 </p>
               </div>
             </div>
             
             <div className="p-10 border" style={{ backgroundColor: '#f8fafc', borderColor: '#e2e8f0' }}>
-              <p className="text-[11px] font-black uppercase tracking-[0.2em] mb-6 pb-4 border-b" style={{ color: '#64748b', borderColor: '#e2e8f0' }}>আর্থিক স্থিতি (Summary)</p>
+              <p className="text-[11px] font-black uppercase tracking-[0.2em] mb-6 pb-4 border-b" style={{ color: '#64748b', borderColor: '#e2e8f0' }}>{t.financialSummary}</p>
               <div className="space-y-5">
                 <div className="flex justify-between items-center">
-                  <span className="text-sm font-bold" style={{ color: '#64748b' }}>মোট আয়:</span>
+                  <span className="text-sm font-bold" style={{ color: '#64748b' }}>{t.totalIncome}</span>
                   <span className="text-lg font-black" style={{ color: '#059669' }}>৳{summary.income.toLocaleString('en-US')}</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-sm font-bold" style={{ color: '#64748b' }}>মোট ব্যয়:</span>
+                  <span className="text-sm font-bold" style={{ color: '#64748b' }}>{t.totalExpense}</span>
                   <span className="text-lg font-black" style={{ color: '#e11d48' }}>৳{summary.expense.toLocaleString('en-US')}</span>
                 </div>
                 <div className="h-px my-2" style={{ backgroundColor: '#cbd5e1' }} />
                 <div className="flex justify-between items-center">
-                  <span className="text-base font-black px-4" style={{ color: '#0f172a', borderLeft: '4px solid #0f172a' }}>বর্তমান ব্যালেন্স:</span>
+                  <span className="text-base font-black px-4" style={{ color: '#0f172a', borderLeft: '4px solid #0f172a' }}>{t.currentBalance}</span>
                   <span className="text-2xl font-black" style={{ color: '#0f172a' }}>৳{balance.toLocaleString('en-US')}</span>
                 </div>
               </div>
@@ -1265,26 +1307,26 @@ export default function App() {
           {/* Transaction Table */}
           <div className="mb-20">
             <h3 className="text-[11px] font-black uppercase tracking-[0.2em] mb-6 flex items-center gap-4" style={{ color: '#0f172a' }}>
-              <span className="shrink-0">লেনদেনের বিস্তারিত</span>
+              <span className="shrink-0">{t.transactionDetails}</span>
               <div className="h-0.5 w-full" style={{ backgroundColor: '#0f172a' }} />
             </h3>
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr style={{ borderBottom: '1px solid #94a3b8' }}>
-                  <th className="py-6 text-[10px] font-black uppercase" style={{ color: '#94a3b8' }}>তারিখ</th>
-                  <th className="py-6 text-[10px] font-black uppercase" style={{ color: '#94a3b8' }}>সময়</th>
-                  <th className="py-6 text-[10px] font-black uppercase" style={{ color: '#94a3b8' }}>খাত / বিবরণ</th>
-                  <th className="py-6 text-[10px] font-black uppercase" style={{ color: '#94a3b8' }}>টাইপ</th>
-                  <th className="py-6 text-[10px] font-black uppercase text-right" style={{ color: '#94a3b8' }}>পরিমাণ (৳)</th>
+                  <th className="py-6 text-[10px] font-black uppercase" style={{ color: '#94a3b8' }}>{t.date}</th>
+                  <th className="py-6 text-[10px] font-black uppercase" style={{ color: '#94a3b8' }}>{t.time}</th>
+                  <th className="py-6 text-[10px] font-black uppercase" style={{ color: '#94a3b8' }}>{t.category}</th>
+                  <th className="py-6 text-[10px] font-black uppercase" style={{ color: '#94a3b8' }}>{t.type}</th>
+                  <th className="py-6 text-[10px] font-black uppercase text-right" style={{ color: '#94a3b8' }}>{t.amountTable}</th>
                 </tr>
               </thead>
               <tbody>
-                {(exportDays === 'all' ? transactions : transactions.filter(t => isAfter(new Date(t.date), subDays(new Date(), exportDays as number)))).length === 0 ? (
+                {(exportDays === 'all' ? transactions : transactions.filter(t_item => isAfter(new Date(t_item.date), subDays(new Date(), exportDays as number)))).length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="py-20 text-center font-bold italic" style={{ color: '#cbd5e1' }}>কোনো লেনদেন পাওয়া যায়নি</td>
+                    <td colSpan={5} className="py-20 text-center font-bold italic" style={{ color: '#cbd5e1' }}>{t.noTransactionsFound}</td>
                   </tr>
                 ) : (
-                  (exportDays === 'all' ? transactions : transactions.filter(t => isAfter(new Date(t.date), subDays(new Date(), exportDays as number)))).map((tx) => (
+                  (exportDays === 'all' ? transactions : transactions.filter(t_item => isAfter(new Date(t_item.date), subDays(new Date(), exportDays as number)))).map((tx) => (
                     <tr key={tx.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
                       <td className="py-6">
                         <p className="font-bold text-sm tracking-tight" style={{ color: '#1e293b' }}>{format(new Date(tx.date), 'dd/MM/yyyy')}</p>
@@ -1302,7 +1344,7 @@ export default function App() {
                           color: tx.type === 'income' ? '#047857' : '#be123c',
                           borderColor: tx.type === 'income' ? '#a7f3d0' : '#fecdd3'
                         }}>
-                          {tx.type === 'income' ? 'CREDIT' : 'DEBIT'}
+                          {tx.type === 'income' ? t.credit : t.debit}
                         </span>
                       </td>
                       <td className="py-6 text-right">
@@ -1324,14 +1366,14 @@ export default function App() {
             <div className="flex justify-center gap-12">
               <div className="text-center">
                 <div className="w-32 h-px mx-auto mb-3" style={{ backgroundColor: '#cbd5e1' }} />
-                <p className="text-[8px] font-black uppercase tracking-widest" style={{ color: '#94a3b8' }}>Client Signature</p>
+                <p className="text-[8px] font-black uppercase tracking-widest" style={{ color: '#94a3b8' }}>{t.clientSignature}</p>
               </div>
               <div className="text-center">
                 <div className="w-32 h-px mx-auto mb-3" style={{ backgroundColor: '#e2e8f0' }} />
-                <p className="text-[8px] font-black uppercase tracking-widest" style={{ color: '#94a3b8' }}>Authorized Stamp</p>
+                <p className="text-[8px] font-black uppercase tracking-widest" style={{ color: '#94a3b8' }}>{t.authorizedStamp}</p>
               </div>
             </div>
-            <p className="text-[9px] font-bold uppercase tracking-[0.3em]" style={{ color: '#cbd5e1' }}>Amar Pocket • Generated Digital Document</p>
+            <p className="text-[9px] font-bold uppercase tracking-[0.3em]" style={{ color: '#cbd5e1' }}>{t.generatedDocument}</p>
           </div>
         </div>
       </div>
