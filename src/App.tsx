@@ -153,6 +153,7 @@ export default function App() {
     const saved = localStorage.getItem('pocket_lang');
     return (saved as Language) || 'en';
   });
+  const [initialLang, setInitialLang] = useState<Language>(lang);
 
   const t = translations[lang];
   const locale = lang === 'bn' ? bn : enUS;
@@ -398,6 +399,8 @@ export default function App() {
         // User closed
       } else if (error.code === 'auth/operation-not-allowed') {
         showDialog(t.configProblemTitle, t.configProblemMessage, 'error');
+      } else if (error.code === 'auth/invalid-credential') {
+        showDialog(t.error, lang === 'bn' ? 'অকার্যকর ক্রেডেনশিয়াল। দয়া করে ফায়ারবেস কনসোলে ডোমেইন অথরাইজড আছে কিনা চেক করুন।' : 'Invalid credential. Please check if your domain is authorized in Firebase Console.', 'error');
       } else {
         showDialog(t.login + ' ' + t.error, t.googleLoginFailed + ` (Error: ${error.code})`, 'error');
       }
@@ -430,7 +433,7 @@ export default function App() {
       if (error.code === 'auth/email-already-in-use') setAuthError(t.emailInUse);
       else if (error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') setAuthError(t.wrongCredentials);
       else if (error.code === 'auth/too-many-requests') setAuthError(t.tooManyAttempts);
-      else setAuthError(t.error + '. ' + t.checkInfo);
+      else setAuthError(t.error + '. ' + (error.message || t.checkInfo));
     } finally {
       setAuthLoading(false);
     }
@@ -610,10 +613,16 @@ export default function App() {
     if (!user) return;
     setAuthLoading(true);
     try {
-      await updateProfile(user, { 
-        displayName: newDisplayName.trim() || user.displayName,
-        photoURL: newPhotoURL.trim() || user.photoURL
-      });
+      // Update Firebase Profile if needed
+      if (newDisplayName !== user.displayName || newPhotoURL !== user.photoURL) {
+        await updateProfile(user, { 
+          displayName: newDisplayName.trim() || user.displayName,
+          photoURL: newPhotoURL.trim() || user.photoURL
+        });
+      }
+      
+      // Update initialLang after successful profile/language "save"
+      setInitialLang(lang);
       setIsProfileOpen(false);
       showDialog(t.success, t.profileUpdated, 'success');
     } catch (error) {
@@ -991,7 +1000,7 @@ export default function App() {
                  </div>
                )}
             </button>
-            <div onClick={() => setIsProfileOpen(true)} className="cursor-pointer">
+            <div onClick={() => { setIsProfileOpen(true); setInitialLang(lang); }} className="cursor-pointer">
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">{t.goodDay}</p>
               <h2 className="font-bold text-sm text-slate-800">{user.displayName || t.user}</h2>
             </div>
@@ -1619,7 +1628,7 @@ export default function App() {
                       {t.cancel}
                     </button>
                     <button 
-                      disabled={authLoading || (!newDisplayName.trim() && !newPhotoURL.trim()) || (newDisplayName === user.displayName && newPhotoURL === user.photoURL)}
+                      disabled={authLoading || (!newDisplayName.trim() && !newPhotoURL.trim() && lang === initialLang) || (newDisplayName === user.displayName && newPhotoURL === user.photoURL && lang === initialLang)}
                       type="submit"
                       className="flex-[2] bg-emerald-500 text-slate-950 py-4 rounded-2xl font-black text-sm shadow-lg shadow-emerald-500/20 active:scale-95 disabled:opacity-50 transition-all"
                     >
