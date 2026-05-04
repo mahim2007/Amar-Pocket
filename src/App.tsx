@@ -124,6 +124,7 @@ export default function App() {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [newDisplayName, setNewDisplayName] = useState('');
   const [newPhotoURL, setNewPhotoURL] = useState('');
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
 
   // Custom UI Dialog State
   const [dialog, setDialog] = useState<{
@@ -144,6 +145,25 @@ export default function App() {
   };
 
   const closeDialog = () => setDialog(prev => ({ ...prev, isOpen: false }));
+
+  // PWA Install Event
+  useEffect(() => {
+    const handler = (e: any) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+    window.addEventListener('beforeinstallprompt', handler);
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
+
+  const installApp = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') {
+      setDeferredPrompt(null);
+    }
+  };
 
   // Handle Auth
   useEffect(() => {
@@ -740,7 +760,7 @@ export default function App() {
             <div className="grid grid-cols-2 gap-4 pt-6 border-t border-slate-50">
               <div className="space-y-1">
                 <div className="flex items-center gap-1.5 text-emerald-600">
-                  <ArrowUpCircle className="w-4 h-4 font-bold" />
+                  <ArrowDownCircle className="w-4 h-4 font-bold" />
                   <span className="text-[10px] font-black uppercase tracking-wider">আয়</span>
                 </div>
                 {loading ? (
@@ -751,7 +771,7 @@ export default function App() {
               </div>
               <div className="space-y-1 border-l border-slate-100 pl-4">
                 <div className="flex items-center gap-1.5 text-rose-500">
-                  <ArrowDownCircle className="w-4 h-4 font-bold" />
+                  <ArrowUpCircle className="w-4 h-4 font-bold" />
                   <span className="text-[10px] font-black uppercase tracking-wider">ব্যয়</span>
                 </div>
                 {loading ? (
@@ -833,7 +853,7 @@ export default function App() {
                         "w-12 h-12 rounded-[1.25rem] flex items-center justify-center shrink-0 shadow-sm",
                         tx.type === 'income' ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-500"
                       )}>
-                        {tx.type === 'income' ? <PlusCircle className="w-5 h-5" /> : <Minus className="w-5 h-5" />}
+                        {tx.type === 'income' ? <Minus className="w-5 h-5" /> : <PlusCircle className="w-5 h-5" />}
                       </div>
                       <div>
                         <h4 className="font-black text-sm text-slate-800 mb-0.5">{tx.category}</h4>
@@ -884,7 +904,7 @@ export default function App() {
       {/* --- ADD MODAL --- */}
       <AnimatePresence>
         {isAdding && (
-          <div className="fixed inset-0 z-[100] flex items-end justify-center p-0 md:p-6 md:items-center overflow-y-auto no-scrollbar py-10 md:py-0">
+          <div className="fixed inset-0 z-[100] flex items-end justify-center md:p-6 md:items-center overflow-hidden">
             <motion.div 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -898,7 +918,7 @@ export default function App() {
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
               transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-              className="relative w-full max-w-md bg-white rounded-t-[3rem] md:rounded-[3rem] p-8 shadow-2xl max-h-[92vh] overflow-y-auto no-scrollbar"
+              className="relative w-full max-w-md bg-white rounded-t-[3rem] md:rounded-[3rem] p-8 pb-10 shadow-2xl max-h-[92vh] overflow-y-auto overscroll-contain no-scrollbar"
             >
               <div className="flex justify-between items-center mb-8">
                 <div>
@@ -924,7 +944,7 @@ export default function App() {
                       type === 'expense' ? "bg-white text-rose-600 shadow-xl border border-slate-100" : "text-slate-500"
                     )}
                   >
-                    <ArrowDownCircle className="w-4 h-4" /> ব্যয়
+                    <ArrowUpCircle className="w-4 h-4" /> ব্যয়
                   </button>
                   <button
                     type="button"
@@ -934,7 +954,7 @@ export default function App() {
                       type === 'income' ? "bg-white text-emerald-600 shadow-xl border border-slate-100" : "text-slate-500"
                     )}
                   >
-                    <ArrowUpCircle className="w-4 h-4" /> আয়
+                    <ArrowDownCircle className="w-4 h-4" /> আয়
                   </button>
                 </div>
 
@@ -1009,7 +1029,7 @@ export default function App() {
       {/* --- PROFILE/SETTINGS MODAL --- */}
       <AnimatePresence>
         {isProfileOpen && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 overflow-y-auto no-scrollbar py-20">
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 overflow-hidden">
             <motion.div 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -1022,7 +1042,7 @@ export default function App() {
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.9 }}
-              className="relative w-full max-w-sm bg-white rounded-[3rem] p-8 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.1)] border border-slate-100 overflow-hidden max-h-[90vh] overflow-y-auto no-scrollbar"
+              className="relative w-full max-w-sm bg-white rounded-[3rem] p-8 pb-10 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.1)] border border-slate-100 overflow-y-auto overscroll-contain no-scrollbar max-h-[90vh]"
             >
               <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-br from-emerald-400 to-emerald-600" />
               
@@ -1088,12 +1108,23 @@ export default function App() {
                   </div>
                 </form>
 
-                <button 
-                  onClick={() => { setIsProfileOpen(false); handleLogout(); }}
-                  className="mt-8 text-rose-500 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 mx-auto hover:opacity-70 transition-all"
-                >
-                  <LogOut className="w-3 h-3" /> লগ-আউট করুন
-                </button>
+                <div className="mt-8 space-y-4">
+                  {deferredPrompt && (
+                    <button 
+                      onClick={installApp}
+                      className="w-full bg-emerald-500 text-slate-950 py-4 rounded-2xl font-black text-sm shadow-lg shadow-emerald-500/20 active:scale-95 transition-all flex items-center justify-center gap-3"
+                    >
+                      <Download className="w-5 h-5" /> অ্যাপ ইন্সটল করুন
+                    </button>
+                  )}
+
+                  <button 
+                    onClick={() => { setIsProfileOpen(false); handleLogout(); }}
+                    className="w-full py-4 bg-rose-50 text-rose-600 rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-rose-100 transition-all"
+                  >
+                    <LogOut className="w-3 h-3" /> লগ-আউট করুন
+                  </button>
+                </div>
               </div>
 
               <button 
