@@ -149,11 +149,20 @@ export default function App() {
   const [newDisplayName, setNewDisplayName] = useState('');
   const [newPhotoURL, setNewPhotoURL] = useState('');
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
-  const [lang, setLang] = useState<Language>(() => {
+  const [lang, setLang] = useState<Language>('en');
+  const [initialLang, setInitialLang] = useState<Language>('en');
+
+  useEffect(() => {
     const saved = localStorage.getItem('pocket_lang');
-    return (saved as Language) || 'en';
-  });
-  const [initialLang, setInitialLang] = useState<Language>(lang);
+    if (saved) {
+      setLang(saved as Language);
+      setInitialLang(saved as Language);
+    }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem('pocket_lang', lang);
+  }, [lang]);
 
   const t = translations[lang];
   const locale = lang === 'bn' ? bn : enUS;
@@ -614,14 +623,15 @@ export default function App() {
     setAuthLoading(true);
     try {
       // Update Firebase Profile if needed
-      if (newDisplayName !== user.displayName || newPhotoURL !== user.photoURL) {
+      if (newDisplayName.trim() !== (user.displayName || '') || newPhotoURL.trim() !== (user.photoURL || '')) {
         await updateProfile(user, { 
-          displayName: newDisplayName.trim() || user.displayName,
-          photoURL: newPhotoURL.trim() || user.photoURL
+          displayName: newDisplayName.trim(),
+          photoURL: newPhotoURL.trim()
         });
       }
       
-      // Update initialLang after successful profile/language "save"
+      // Save language preference
+      localStorage.setItem('pocket_lang', lang);
       setInitialLang(lang);
       setIsProfileOpen(false);
       showDialog(t.success, t.profileUpdated, 'success');
@@ -989,7 +999,12 @@ export default function App() {
         <div className="max-w-md mx-auto flex justify-between items-center">
           <div className="flex items-center gap-3">
             <button 
-              onClick={() => setIsProfileOpen(true)}
+              onClick={() => {
+                setNewDisplayName(user.displayName || '');
+                setNewPhotoURL(user.photoURL || '');
+                setInitialLang(lang);
+                setIsProfileOpen(true);
+              }}
               className="w-10 h-10 rounded-2xl bg-emerald-500 overflow-hidden shadow-lg shadow-emerald-500/20 border-2 border-white active:scale-95 transition-all"
             >
                {user.photoURL ? (
@@ -1000,7 +1015,12 @@ export default function App() {
                  </div>
                )}
             </button>
-            <div onClick={() => { setIsProfileOpen(true); setInitialLang(lang); }} className="cursor-pointer">
+            <div onClick={() => { 
+              setNewDisplayName(user.displayName || '');
+              setNewPhotoURL(user.photoURL || '');
+              setInitialLang(lang);
+              setIsProfileOpen(true); 
+            }} className="cursor-pointer">
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">{t.goodDay}</p>
               <h2 className="font-bold text-sm text-slate-800">{user.displayName || t.user}</h2>
             </div>
@@ -1628,9 +1648,14 @@ export default function App() {
                       {t.cancel}
                     </button>
                     <button 
-                      disabled={authLoading || (!newDisplayName.trim() && !newPhotoURL.trim() && lang === initialLang) || (newDisplayName === user.displayName && newPhotoURL === user.photoURL && lang === initialLang)}
+                      disabled={authLoading || (newDisplayName.trim() === (user.displayName || '') && newPhotoURL.trim() === (user.photoURL || '') && lang === initialLang)}
                       type="submit"
-                      className="flex-[2] bg-emerald-500 text-slate-950 py-4 rounded-2xl font-black text-sm shadow-lg shadow-emerald-500/20 active:scale-95 disabled:opacity-50 transition-all"
+                      className={cn(
+                        "flex-[2] py-4 rounded-2xl font-black text-sm transition-all active:scale-95",
+                        (newDisplayName.trim() !== (user.displayName || '') || newPhotoURL.trim() !== (user.photoURL || '') || lang !== initialLang) && !authLoading
+                          ? "bg-emerald-500 text-slate-950 shadow-lg shadow-emerald-500/20" 
+                          : "bg-slate-100 text-slate-400 opacity-50 cursor-not-allowed"
+                      )}
                     >
                       {authLoading ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : t.update}
                     </button>
