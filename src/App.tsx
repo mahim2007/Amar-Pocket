@@ -171,31 +171,6 @@ export default function App() {
   const [isAdminVerifying, setIsAdminVerifying] = useState(false);
 
   useEffect(() => {
-    const checkEmailLink = async () => {
-      if (isSignInWithEmailLink(auth, window.location.href)) {
-        setIsAdminVerifying(true);
-        let email = window.localStorage.getItem('emailForSignIn');
-        if (!email) {
-          email = window.prompt('Please provide your email for confirmation');
-        }
-        
-        if (email) {
-          try {
-            await signInWithEmailLink(auth, email, window.location.href);
-            window.localStorage.removeItem('emailForSignIn');
-            showDialog(t.success, 'Admin authenticated successfully!', 'success');
-          } catch (error: any) {
-            console.error('Error signing in with email link', error);
-            showDialog(t.error, 'Failed to authenticate: ' + error.message, 'error');
-          }
-        }
-        setIsAdminVerifying(false);
-      }
-    };
-    checkEmailLink();
-  }, []);
-
-  useEffect(() => {
     const saved = localStorage.getItem('pocket_lang');
     if (saved) {
       setLang(saved as Language);
@@ -209,6 +184,30 @@ export default function App() {
 
   const t = translations[lang];
   const locale = lang === 'bn' ? bn : enUS;
+
+  useEffect(() => {
+    const checkEmailLink = async () => {
+      if (isSignInWithEmailLink(auth, window.location.href)) {
+        setIsAdminVerifying(true);
+        let email = window.localStorage.getItem('emailForSignIn');
+        if (!email) {
+          email = window.prompt('Please provide your email for confirmation');
+        }
+        
+        if (email) {
+          try {
+            await signInWithEmailLink(auth, email, window.location.href);
+            window.localStorage.removeItem('emailForSignIn');
+          } catch (error: any) {
+            console.error('Error signing in with email link', error);
+            showDialog(t.error, 'Failed to authenticate: ' + error.message, 'error');
+          }
+        }
+        setIsAdminVerifying(false);
+      }
+    };
+    checkEmailLink();
+  }, [t.error]);
 
   const expenseCategories = t.categories.expense;
   const incomeCategories = t.categories.income;
@@ -277,18 +276,6 @@ export default function App() {
   };
 
   if (isAdminView) {
-    if (loading || isAdminVerifying) {
-      return (
-        <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-center">
-          <div className="w-16 h-16 bg-white rounded-3xl shadow-xl flex items-center justify-center mb-6 animate-pulse">
-            <ShieldCheck className="w-8 h-8 text-emerald-500" />
-          </div>
-          <h2 className="text-xl font-black text-slate-900 mb-2">Verifying Admin Access</h2>
-          <p className="text-slate-400 font-medium text-sm animate-pulse">Please wait while we secure your session...</p>
-        </div>
-      );
-    }
-    
     const isActuallyAdmin = user && user.email?.toLowerCase() === adminEmail.toLowerCase();
 
     if (!isActuallyAdmin) {
@@ -307,6 +294,13 @@ export default function App() {
               <h1 className="text-2xl font-black text-slate-900 tracking-tight mb-2">Admin Security</h1>
               <p className="text-slate-400 font-medium text-sm">Verify your identity to access the control panel.</p>
             </div>
+
+            {isAdminVerifying && (
+              <div className="mb-6 p-4 bg-emerald-50 rounded-2xl flex items-center gap-3 animate-pulse">
+                <Clock className="w-4 h-4 text-emerald-500" />
+                <p className="text-emerald-900 text-[10px] font-bold">Verifying magic link...</p>
+              </div>
+            )}
 
             {adminLinkSent ? (
               <div className="text-center p-6 bg-emerald-50 rounded-3xl border border-emerald-100">
