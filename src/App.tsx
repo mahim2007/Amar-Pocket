@@ -1309,9 +1309,9 @@ export default function App() {
               { l: t.sevenDays, d: 7 },
               { l: t.thirtyDays, d: 30 },
               { l: t.forever, d: 'all' }
-            ].map((opt) => (
+            ].map((opt, idx) => (
               <button 
-                key={opt.l}
+                key={`${opt.l}-${idx}`}
                 onClick={() => exportPDFWithCanvas(opt.d as any)}
                 disabled={isExporting}
                 className="flex items-center gap-2 px-6 py-3 bg-white hover:bg-slate-900 hover:text-white rounded-2xl text-[10px] font-black transition-all border border-slate-100 shadow-sm whitespace-nowrap group disabled:opacity-50"
@@ -1487,7 +1487,7 @@ export default function App() {
               {loading ? (
                 <div className="space-y-3">
                   {[1, 2, 3].map(i => (
-                    <div key={i} className="bg-white p-5 rounded-[2rem] border border-slate-50 flex items-center justify-between animate-pulse">
+                    <div key={`skeleton-${i}`} className="bg-white p-5 rounded-[2rem] border border-slate-50 flex items-center justify-between animate-pulse">
                       <div className="flex items-center gap-4">
                         <div className="w-12 h-12 bg-slate-50 rounded-[1.25rem]" />
                         <div className="space-y-2">
@@ -1678,7 +1678,7 @@ export default function App() {
                 <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
                   {[10, 50, 100, 500, 1000].map(val => (
                     <button
-                      key={val}
+                      key={`quick-val-${val}`}
                       type="button"
                       onClick={() => setAmount(val.toString())}
                       className={cn(
@@ -1707,7 +1707,7 @@ export default function App() {
                     <div className="grid grid-cols-3 gap-3">
                       {CATEGORIES[type].map(cat => (
                         <button
-                          key={cat}
+                          key={`cat-${type}-${cat}`}
                           type="button"
                           onClick={() => setCategory(cat)}
                           className={cn(
