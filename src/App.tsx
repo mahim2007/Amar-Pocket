@@ -195,7 +195,13 @@ export default function App() {
       }
     } catch (error: any) {
       console.error('Admin login error:', error);
-      setAdminAuthError(error.message);
+      let errorMsg = error.message;
+      if (error.code === 'auth/network-request-failed') {
+        errorMsg = 'Network request failed. Please check your internet connection, disable ad-blockers, or try using a different browser.';
+      } else if (error.code === 'auth/popup-blocked') {
+        errorMsg = 'Popup blocked! Please allow popups for this site to sign in with Google.';
+      }
+      setAdminAuthError(errorMsg);
     } finally {
       setAdminAuthLoading(false);
     }
@@ -562,6 +568,8 @@ export default function App() {
         showDialog(t.configProblemTitle, t.configProblemMessage, 'error');
       } else if (error.code === 'auth/invalid-credential') {
         showDialog(t.error, lang === 'bn' ? 'অকার্যকর ক্রেডেনশিয়াল। দয়া করে ফায়ারবেস কনসোলে ডোমেইন অথরাইজড আছে কিনা চেক করুন।' : 'Invalid credential. Please check if your domain is authorized in Firebase Console.', 'error');
+      } else if (error.code === 'auth/network-request-failed') {
+        showDialog(t.error, lang === 'bn' ? 'নেটওয়ার্ক রিকোয়েস্ট ফেইলড। দয়া করে আপনার ইন্টারনেট কানেকশন চেক করুন বা অ্যাড-ব্লকার অফ করুন।' : 'Network request failed. Please check your internet connection or disable ad-blockers.', 'error');
       } else {
         showDialog(t.login + ' ' + t.error, t.googleLoginFailed + ` (Error: ${error.code})`, 'error');
       }
