@@ -182,29 +182,46 @@ export default function App() {
   const locale = lang === 'bn' ? bn : enUS;
 
   const handleAdminEmailPasswordLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!adminEmailInput || !adminPasswordInput) return;
+    if (e) e.preventDefault();
+    if (!adminEmailInput || !adminPasswordInput) {
+      setAdminAuthError('Please enter both email and password.');
+      return;
+    }
     
     setAdminAuthLoading(true);
     setAdminAuthError('');
+    
     try {
-      const result = await signInWithEmailAndPassword(auth, adminEmailInput, adminPasswordInput);
+      console.log('Attempting admin login...');
+      const result = await signInWithEmailAndPassword(auth, adminEmailInput.trim(), adminPasswordInput);
       const userEmail = result.user.email?.toLowerCase();
       
+      console.log('Admin login successful, checking email:', userEmail);
+      
       if (userEmail !== adminEmail.toLowerCase()) {
+        console.warn('Access denied approach - user is not admin');
         await auth.signOut();
         setAdminAuthError('Access Denied: You are not authorized to view this panel.');
+        setUser(null);
+      } else {
+        console.log('Admin verified, setting user state');
+        setUser(result.user);
+        // The isAdminView switch will happen automatically on re-render
       }
     } catch (error: any) {
-      console.error('Admin login error:', error);
-      let errorMsg = error.message;
+      console.error('Admin login error detail:', error);
+      let errorMsg = error.message || 'An unknown authentication error occurred.';
+      
       if (error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
         errorMsg = 'Incorrect password or email. Please try again.';
       } else if (error.code === 'auth/user-not-found') {
         errorMsg = 'Admin account not found.';
       } else if (error.code === 'auth/network-request-failed') {
         errorMsg = 'Network request failed. Please check your internet connection.';
+      } else if (error.code === 'auth/too-many-requests') {
+        errorMsg = 'Too many failed attempts. Please try again later.';
       }
+      
       setAdminAuthError(errorMsg);
     } finally {
       setAdminAuthLoading(false);
