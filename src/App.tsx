@@ -236,36 +236,35 @@ export default function App() {
     setAuthLoading(true);
     setAuthError('');
     
-    // Check if we are in an iframe or on a potentially restrictive browser
-    const isIframe = window.self !== window.top;
-    
     try {
-      if (isIframe) {
-        // In AI Studio preview, popup often fails. Redirect is safer for complex environments.
-        await signInWithRedirect(auth, googleProvider);
-      } else {
-        await signInWithPopup(auth, googleProvider);
-      }
+      // Prefer popup for better user experience if supported
+      await signInWithPopup(auth, googleProvider);
     } catch (error: any) {
       console.error('Google Login Error:', error);
       
       if (error.code === 'auth/popup-blocked') {
         showDialog(
           'পপআপ ব্লকড', 
-          'আপনার ব্রাউজারে পপআপ ব্লক করা আছে। বিকল্প পদ্ধতিতে চেষ্টা করতে চান?', 
+          'আপনার ব্রাউজারে পপআপ ব্লক করা আছে। দয়া করে পপআপ অ্যালাউ করুন অথবা বিকল্প রিডাইরেক্ট পদ্ধতিতে চেষ্টা করুন।', 
           'confirm',
           () => signInWithRedirect(auth, googleProvider)
         );
       } else if (error.code === 'auth/cancelled-popup-request' || error.code === 'auth/popup-closed-by-user') {
         // User closed
-      } else if (error.code === 'auth/auth-domain-config-required') {
-        showDialog('কনফিগ ত্রুটি', 'Firebase প্যানেলে ডোমেইন অথোরাইজেশন সেটআপ করতে হবে।', 'error');
+      } else if (error.code === 'auth/operation-not-allowed') {
+        showDialog('কনফিগারেশন সমস্যা', 'Firebase কনসোলে Google Login মেথডটি এনাবল করা নেই।', 'error');
+      } else if (error.message.includes('403')) {
+        showDialog(
+          'অ্যাক্সেস ডিনাইড (403)', 
+          'Google Cloud Console-এ আপনার অ্যাপটি হয়তো "Testing" মোডে আছে। দয়া করে নিশ্চিত করুন আপনার ইমেইলটি "Test Users" লিস্টে আছে অথবা অ্যাপটি "Production" মোডে পাবলিশ করুন।', 
+          'error'
+        );
       } else {
-        // Try fallback to redirect if popup failed for unknown reasons
+        // Try fallback if popup fails
         try {
           await signInWithRedirect(auth, googleProvider);
         } catch (redirectError) {
-          showDialog('লগইন ব্যর্থ', `Google লগইন করা সম্ভব হয়নি। Error: ${error.code}`, 'error');
+          showDialog('লগইন ব্যর্থ', `Google লগইন করা সম্ভব হয়নি। (Error: ${error.code})`, 'error');
         }
       }
     } finally {
