@@ -480,54 +480,24 @@ export default function App() {
         setIsVerifying(false);
       }
       
+      // Set user and stop loading screen immediately once auth is determined
+      // Don't wait for the firestore sync below to finish
+      setUser(currentUser);
+      setLoading(false);
+
       if (currentUser) {
-        // Sync user to Firestore
+        // Sync user to Firestore in background
         try {
           const userDocRef = doc(db, 'users', currentUser.uid);
-          const userDoc = await getDocs(query(collection(db, 'users'), where('email', '==', currentUser.email)));
-          
-          // Check if blocked
-          const userData = userDoc.docs[0]?.data();
-          if (userData?.blocked) {
-            await signOut(auth);
-            showDialog(t.error, lang === 'bn' ? 'আপনার অ্যাকাউন্টটি ব্লক করা হয়েছে।' : 'Your account has been blocked.', 'error');
-            setUser(null);
-            setLoading(false);
-            return;
-          }
-
-          // Update/Create user record
-          const now = new Date().toISOString();
-          const userPayload = {
-            displayName: currentUser.displayName || 'User',
-            email: currentUser.email || '',
-            lastLogin: now,
-            updatedAt: now,
-            photoURL: currentUser.photoURL || ''
-          };
-
-          if (userDoc.empty) {
-            // New user in our collection
-            await setDoc(userDocRef, {
-              ...userPayload,
-              createdAt: now,
-              blocked: false
-            });
-          } else {
-            // Existing user, update lastLogin
-            await updateDoc(userDocRef, userPayload);
-          }
+          // Non-blocking sync
+          syncUserRecord(currentUser, userDocRef);
         } catch (err) {
           console.error('Error syncing user:', err);
         }
 
         setNewDisplayName(currentUser.displayName || '');
         setNewPhotoURL(currentUser.photoURL || '');
-      } else {
-        setLoading(false);
       }
-      setUser(currentUser);
-      setLoading(false);
     });
 
     return () => {
@@ -535,6 +505,42 @@ export default function App() {
       unsubscribe();
     };
   }, []);
+
+  // Helper for non-blocking user sync
+  const syncUserRecord = async (currentUser: any, userDocRef: any) => {
+    try {
+      const userDoc = await getDocs(query(collection(db, 'users'), where('email', '==', currentUser.email)));
+      const userData = userDoc.docs[0]?.data();
+      
+      if (userData?.blocked) {
+        await signOut(auth);
+        showDialog(t.error, lang === 'bn' ? 'আপনার অ্যাকাউন্টটি ব্লক করা হয়েছে।' : 'Your account has been blocked.', 'error');
+        setUser(null);
+        return;
+      }
+
+      const now = new Date().toISOString();
+      const userPayload = {
+        displayName: currentUser.displayName || 'User',
+        email: currentUser.email || '',
+        lastLogin: now,
+        updatedAt: now,
+        photoURL: currentUser.photoURL || ''
+      };
+
+      if (userDoc.empty) {
+        await setDoc(userDocRef, {
+          ...userPayload,
+          createdAt: now,
+          blocked: false
+        });
+      } else {
+        await updateDoc(userDocRef, userPayload);
+      }
+    } catch (err) {
+      console.error('Background sync error:', err);
+    }
+  };
 
   // Sync Transactions
   useEffect(() => {
@@ -558,8 +564,8 @@ export default function App() {
       
       setTransactions(txs);
       
-      // Stop skeleton loading as soon as we have data (could be from cache)
-      setLoading(false);
+      // Stop skeleton loading as soon as we have data
+      // setLoading(false); // Removed to prevent blocking initial render
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, path);
     });

@@ -70,6 +70,7 @@ export default function AdminDashboard({ onBack, adminEmail }: AdminDashboardPro
   const [notificationMsg, setNotificationMsg] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [stats, setStats] = useState({ totalUsers: 0, totalTx: 0, totalIncome: 0, totalExpense: 0 });
+  const [selectedUserId, setSelectedUserId] = useState<string>('all');
 
   useEffect(() => {
     // Fetch Stats & Users
@@ -155,6 +156,10 @@ export default function AdminDashboard({ onBack, adminEmail }: AdminDashboardPro
     u.displayName?.toLowerCase().includes(searchQuery.toLowerCase()) || 
     u.email?.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const filteredTransactions = selectedUserId === 'all' 
+    ? transactions 
+    : transactions.filter(tx => tx.userId === selectedUserId);
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 font-sans pb-10">
@@ -299,27 +304,58 @@ export default function AdminDashboard({ onBack, adminEmail }: AdminDashboardPro
 
           {activeTab === 'activity' && (
             <div className="p-4 md:p-8">
-               <h2 className="text-xl md:text-2xl font-black text-slate-900 tracking-tight mb-8">Activity Tracking</h2>
-               <div className="space-y-3">
-                 {transactions.map(tx => (
-                   <div key={tx.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-slate-50/50 rounded-2xl border border-slate-100 gap-3">
-                     <div className="flex items-center gap-4">
-                       <div className={`p-3 rounded-xl shrink-0 ${tx.type === 'income' ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
-                         {tx.type === 'income' ? <Activity className="w-5 h-5" /> : <Clock className="w-5 h-5" />}
-                       </div>
-                       <div className="min-w-0">
-                         <p className="text-sm font-black text-slate-800 truncate">{tx.category} <span className="text-slate-400 font-bold ml-1">- {tx.note || 'No note'}</span></p>
-                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{format(new Date(tx.date || Date.now()), 'MMM d, hh:mm a')}</p>
-                       </div>
-                     </div>
-                     <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-start">
-                       <p className={`text-base sm:text-sm font-black ${tx.type === 'income' ? 'text-emerald-500' : 'text-slate-900'}`}>
-                         {tx.type === 'income' ? '+' : '-'}৳{Number(tx.amount || 0).toLocaleString()}
-                       </p>
-                       <p className="text-[9px] font-black text-slate-300 uppercase tracking-tighter">UID: {tx.userId?.slice(0, 8) || 'Unknown'}...</p>
-                     </div>
+               <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+                 <div>
+                   <h2 className="text-xl md:text-2xl font-black text-slate-900 tracking-tight">Activity Tracking</h2>
+                   <p className="text-slate-400 font-medium text-xs md:text-sm">Monitor system-wide financial transactions</p>
+                 </div>
+                 <div className="relative w-full md:w-72">
+                   <Users className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
+                   <select 
+                    value={selectedUserId}
+                    onChange={(e) => setSelectedUserId(e.target.value)}
+                    className="w-full bg-slate-50 border-none rounded-2xl py-3.5 pl-10 pr-10 text-sm font-bold text-slate-700 focus:ring-2 focus:ring-emerald-500/20 transition-all outline-none appearance-none cursor-pointer shadow-sm"
+                   >
+                     <option value="all">All Users Activity</option>
+                     {users.map(u => (
+                       <option key={u.id} value={u.id}>{u.displayName || u.email}</option>
+                     ))}
+                   </select>
+                   <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
+                     <ChevronRight className="w-4 h-4 text-slate-300 rotate-90" />
                    </div>
-                 ))}
+                 </div>
+               </div>
+
+               <div className="space-y-3">
+                 {filteredTransactions.length === 0 ? (
+                   <div className="py-20 text-center bg-slate-50 rounded-[2rem] border border-dashed border-slate-200">
+                     <p className="text-slate-400 font-bold text-sm">No transactions found for this selection.</p>
+                   </div>
+                 ) : (
+                   filteredTransactions.map(tx => (
+                     <div key={tx.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-slate-50/50 rounded-2xl border border-slate-100 gap-3">
+                       <div className="flex items-center gap-4">
+                         <div className={`p-3 rounded-xl shrink-0 ${tx.type === 'income' ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
+                           {tx.type === 'income' ? <Activity className="w-5 h-5" /> : <Clock className="w-5 h-5" />}
+                         </div>
+                         <div className="min-w-0">
+                           <p className="text-sm font-black text-slate-800 truncate">{tx.category} <span className="text-slate-400 font-bold ml-1">- {tx.note || 'No note'}</span></p>
+                           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{format(new Date(tx.date || Date.now()), 'MMM d, hh:mm a')}</p>
+                         </div>
+                       </div>
+                       <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-start">
+                         <p className={`text-base sm:text-sm font-black ${tx.type === 'income' ? 'text-emerald-500' : 'text-slate-900'}`}>
+                           {tx.type === 'income' ? '+' : '-'}৳{Number(tx.amount || 0).toLocaleString()}
+                         </p>
+                         <div className="flex items-center gap-1">
+                           <span className="w-1 h-1 bg-slate-200 rounded-full hidden sm:block" />
+                           <p className="text-[9px] font-black text-slate-300 uppercase tracking-tighter">UID: {tx.userId?.slice(0, 8) || 'Unknown'}...</p>
+                         </div>
+                       </div>
+                     </div>
+                   ))
+                 )}
                </div>
             </div>
           )}
