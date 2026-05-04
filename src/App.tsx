@@ -546,7 +546,7 @@ export default function App() {
         <div className="relative">
           <div className="w-16 h-16 border-4 border-slate-100 border-t-emerald-500 rounded-full animate-spin" />
           <img 
-            src="/logo.png?v=fixed_v1" 
+            src="/pocket-logo.png?v=fixed_v1.1" 
             alt="Logo" 
             className="w-10 h-10 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" 
           />
@@ -571,7 +571,7 @@ export default function App() {
           <div className="text-center mb-10">
             <div className="bg-white w-20 h-20 rounded-[2.2rem] flex items-center justify-center mx-auto mb-5 shadow-2xl shadow-emerald-500/10 border-2 border-slate-50">
               <img 
-                src="/logo.png?v=fixed_v1" 
+                src="/pocket-logo.png?v=fixed_v1.1" 
                 alt="Logo" 
                 className="w-14 h-14 object-contain" 
               />
@@ -805,7 +805,7 @@ export default function App() {
               </div>
               <div className="w-14 h-14 bg-slate-50 rounded-2xl flex items-center justify-center p-2">
                 <img 
-                  src="/logo.png?v=fixed_v1" 
+                  src="/pocket-logo.png?v=fixed_v1.1" 
                   alt="Logo" 
                   className="w-10 h-10 object-contain" 
                 />
@@ -893,7 +893,7 @@ export default function App() {
                   </div>
                   <div className="p-2 rounded-2xl" style={{ backgroundColor: '#ecfdf5' }}>
                     <img 
-                      src="/logo.png?v=fixed_v1" 
+                      src="/pocket-logo.png?v=fixed_v1.1" 
                       alt="Logo" 
                       className="w-8 h-8 object-contain" 
                     />
@@ -1388,7 +1388,7 @@ export default function App() {
             <div className="flex justify-between items-start">
               <div className="flex items-center gap-6">
                 <img 
-                  src="/logo.png?v=fixed_v1" 
+                  src="/pocket-logo.png?v=fixed_v1.1" 
                   alt="Logo" 
                   className="w-16 h-16 object-contain" 
                 />
