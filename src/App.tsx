@@ -546,10 +546,10 @@ export default function App() {
         <div className="relative">
           <div className="w-16 h-16 border-4 border-slate-100 border-t-emerald-500 rounded-full animate-spin" />
           <img 
-            src="/logo.png" 
+            src="/logo.png?v=2" 
             alt="Logo" 
             className="w-10 h-10 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" 
-            onError={(e) => { e.currentTarget.src = "/logo.svg"; }}
+            onError={(e) => { e.currentTarget.src = "/logo.svg?v=2"; }}
           />
         </div>
         <p className="mt-6 text-slate-400 font-bold text-[10px] uppercase tracking-widest animate-pulse">{t.loading}</p>
@@ -572,10 +572,10 @@ export default function App() {
           <div className="text-center mb-10">
             <div className="bg-white w-20 h-20 rounded-[2.2rem] flex items-center justify-center mx-auto mb-5 shadow-2xl shadow-emerald-500/10 border-2 border-slate-50">
               <img 
-                src="/logo.png" 
+                src="/logo.png?v=2" 
                 alt="Logo" 
                 className="w-14 h-14 object-contain" 
-                onError={(e) => { e.currentTarget.src = "/logo.svg"; }}
+                onError={(e) => { e.currentTarget.src = "/logo.svg?v=2"; }}
               />
             </div>
             <h1 className="text-3xl font-black text-slate-900 mb-1 tracking-tight">{t.appName}</h1>
@@ -807,10 +807,10 @@ export default function App() {
               </div>
               <div className="w-14 h-14 bg-slate-50 rounded-2xl flex items-center justify-center p-2">
                 <img 
-                  src="/logo.png" 
+                  src="/logo.png?v=2" 
                   alt="Logo" 
                   className="w-10 h-10 object-contain" 
-                  onError={(e) => { e.currentTarget.src = "/logo.svg"; }}
+                  onError={(e) => { e.currentTarget.src = "/logo.svg?v=2"; }}
                 />
               </div>
             </div>
@@ -873,7 +873,7 @@ export default function App() {
                 type="date" 
                 value={reportDate}
                 onChange={(e) => setReportDate(e.target.value)}
-                className="bg-white px-4 py-2 rounded-xl border border-slate-100 text-[10px] font-black text-slate-600 outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all cursor-pointer"
+                className="bg-white px-3 py-2 rounded-xl border border-slate-100 text-[10px] font-black text-slate-600 outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all cursor-pointer w-32 md:w-36"
               />
             </div>
           </div>
@@ -896,10 +896,10 @@ export default function App() {
                   </div>
                   <div className="p-2 rounded-2xl" style={{ backgroundColor: '#ecfdf5' }}>
                     <img 
-                      src="/logo.png" 
+                      src="/logo.png?v=2" 
                       alt="Logo" 
                       className="w-8 h-8 object-contain" 
-                      onError={(e) => { e.currentTarget.src = "/logo.svg"; }}
+                      onError={(e) => { e.currentTarget.src = "/logo.svg?v=2"; }}
                     />
                   </div>
                 </div>
@@ -1392,10 +1392,10 @@ export default function App() {
             <div className="flex justify-between items-start">
               <div className="flex items-center gap-6">
                 <img 
-                  src="/logo.png" 
+                  src="/logo.png?v=2" 
                   alt="Logo" 
                   className="w-16 h-16 object-contain" 
-                  onError={(e) => { e.currentTarget.src = "/logo.svg"; }}
+                  onError={(e) => { e.currentTarget.src = "/logo.svg?v=2"; }}
                 />
                 <div>
                   <h1 className="text-4xl font-black tracking-tight" style={{ color: '#0f172a' }}>{t.appName}</h1>
