@@ -297,10 +297,10 @@ export default function App() {
         setNewDisplayName(currentUser.displayName || '');
         setNewPhotoURL(currentUser.photoURL || '');
       } else {
-        // Reduced timeout for faster feel
+        // Reduced timeout for even faster feel
         setTimeout(() => {
           if (isMounted) setLoading(false);
-        }, 100);
+        }, 30);
       }
     });
 
@@ -691,7 +691,7 @@ export default function App() {
       } finally {
         setIsExporting(false);
       }
-    }, 500);
+    }, 250); // Reduced delay for faster export feel
   };
 
   const renderDialog = () => (
@@ -702,6 +702,7 @@ export default function App() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
             onClick={closeDialog}
             className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm"
           />
@@ -709,6 +710,7 @@ export default function App() {
             initial={{ opacity: 0, scale: 0.9, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.9, y: 20 }}
+            transition={{ duration: 0.15 }}
             className="relative w-full max-w-[340px] bg-white rounded-[2.5rem] p-8 shadow-[0_32px_64px_-12px_rgba(0,0,0,0.12)] border border-slate-100 text-center"
           >
             <div className={cn(
@@ -811,7 +813,7 @@ export default function App() {
             <button 
               onClick={() => { setAuthMode('login'); setAuthError(''); }}
               className={cn(
-                "flex-1 py-4 rounded-xl text-sm font-black transition-all duration-300",
+                "flex-1 py-4 rounded-xl text-sm font-black transition-all duration-200",
                 authMode === 'login' ? "bg-white text-emerald-600 shadow-sm" : "text-slate-400 hover:text-slate-600 font-bold"
               )}
             >
@@ -820,7 +822,7 @@ export default function App() {
             <button 
               onClick={() => { setAuthMode('signup'); setAuthError(''); }}
               className={cn(
-                "flex-1 py-4 rounded-xl text-sm font-black transition-all duration-300",
+                "flex-1 py-4 rounded-xl text-sm font-black transition-all duration-200",
                 authMode === 'signup' ? "bg-white text-emerald-600 shadow-sm" : "text-slate-400 hover:text-slate-600 font-bold"
               )}
             >
@@ -1314,8 +1316,8 @@ export default function App() {
                       animate={{ opacity: 1, scale: 1 }}
                       exit={{ opacity: 0, scale: 0.9 }}
                       transition={{ 
-                        opacity: { duration: 0.2 },
-                        layout: { type: 'spring', damping: 25, stiffness: 300 }
+                        opacity: { duration: 0.15 },
+                        layout: { type: 'spring', damping: 30, stiffness: 450 }
                       }}
                       className="bg-white p-5 rounded-[2rem] shadow-sm border border-slate-50 flex items-center justify-between group active:scale-[0.98] transition-all"
                     >
@@ -1369,7 +1371,7 @@ export default function App() {
           className="w-16 h-16 flex items-center justify-center bg-slate-900 text-white rounded-full font-black shadow-[0_20px_50px_rgba(0,0,0,0.3)] active:scale-90 transition-all hover:bg-emerald-600 hover:shadow-emerald-500/30 group"
           title={t.addRecord}
         >
-          <Plus className="w-8 h-8 group-hover:rotate-90 transition-transform duration-300" />
+          <Plus className="w-8 h-8 group-hover:rotate-90 transition-transform duration-200" />
         </button>
       </div>
 
@@ -1389,7 +1391,7 @@ export default function App() {
               initial={{ y: "100%" }}
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
-              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              transition={{ type: 'spring', damping: 30, stiffness: 450 }}
               className="relative w-full max-w-md bg-white rounded-t-[3rem] md:rounded-[3rem] p-8 pb-10 shadow-2xl max-h-[92vh] overflow-y-auto overscroll-contain no-scrollbar"
             >
               <div className="flex justify-between items-center mb-8">
@@ -1564,6 +1566,7 @@ export default function App() {
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.9 }}
+              transition={{ type: 'spring', damping: 30, stiffness: 450 }}
               className="relative w-full max-w-sm bg-white rounded-[3rem] p-8 pb-10 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.1)] border border-slate-100 overflow-y-auto overscroll-contain no-scrollbar max-h-[90vh]"
             >
               <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-br from-emerald-400 to-emerald-600" />
