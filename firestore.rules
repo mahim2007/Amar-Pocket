@@ -11,6 +11,10 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function isAdmin() {
+      return isSignedIn() && request.auth.token.email == 'mohammadmahim2007@gmail.com' && request.auth.token.email_verified == true;
+    }
+
     function isOwner(userId) {
       return isSignedIn() && request.auth.uid == userId;
     }
@@ -25,6 +29,28 @@ service cloud.firestore {
 
     function existing() {
       return resource.data;
+    }
+
+    // User Validation
+    function isValidUser(data) {
+      return data.keys().hasAll(['displayName', 'email', 'createdAt', 'lastLogin'])
+        && data.displayName is string
+        && data.email is string
+        && data.createdAt is string
+        && data.lastLogin is string;
+    }
+
+    match /users/{userId} {
+      allow get: if isSignedIn() && (isOwner(userId) || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isSignedIn() && isOwner(userId) && isValidUser(incoming());
+      allow update: if isSignedIn() && (isOwner(userId) || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    match /notifications/{notificationId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
     }
 
     // Transaction Validation
@@ -43,20 +69,19 @@ service cloud.firestore {
     }
 
     match /transactions/{transactionId} {
-      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
-      allow get: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow get: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
       
       allow create: if isSignedIn() 
         && isValidTransaction(incoming())
         && isValidId(transactionId);
         
       allow update: if isSignedIn()
-        && isOwner(existing().userId)
+        && (isOwner(existing().userId) || isAdmin())
         && isValidTransaction(incoming())
-        && incoming().userId == existing().userId
-        && incoming().date == existing().date; // Keep date immutable if needed, or allow change
+        && incoming().userId == existing().userId;
         
-      allow delete: if isSignedIn() && isOwner(existing().userId);
+      allow delete: if isSignedIn() && (isOwner(existing().userId) || isAdmin());
     }
   }
 }

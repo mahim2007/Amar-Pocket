@@ -15,12 +15,43 @@
         "createdAt": { "type": "string", "format": "date-time", "description": "ISO timestamp of when the record was created." }
       },
       "required": ["amount", "category", "type", "date", "userId", "createdAt"]
+    },
+    "user": {
+      "title": "User",
+      "description": "User profile and metadata.",
+      "type": "object",
+      "properties": {
+        "displayName": { "type": "string" },
+        "email": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "lastLogin": { "type": "string", "format": "date-time" },
+        "blocked": { "type": "boolean" }
+      }
+    },
+    "notification": {
+      "title": "Notification",
+      "description": "Global broadcast notifications.",
+      "type": "object",
+      "properties": {
+        "message": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "adminEmail": { "type": "string" }
+      }
     }
   },
   "firestore": {
     "/transactions/{transactionId}": {
       "schema": "transaction",
-      "description": "Collection of all user transactions."
+      "description": "User transactions."
+    },
+    "/users/{userId}": {
+      "schema": "user",
+      "description": "User profiles managed by admin."
+    },
+    "/notifications/{notificationId}": {
+      "schema": "notification",
+      "description": "System-wide broadcasts."
     }
   }
 }

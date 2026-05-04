@@ -44,7 +44,8 @@ import {
   Sparkles,
   Gift,
   MoreHorizontal,
-  Calendar
+  Calendar,
+  Bell
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { format, subDays, isAfter } from 'date-fns';
@@ -55,6 +56,7 @@ import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
 import { translations, type Language } from './translations';
+import AdminDashboard from './components/AdminDashboard';
 
 // Firebase imports
 import { 
@@ -81,6 +83,9 @@ import {
   deleteDoc, 
   getDocs,
   orderBy,
+  limit,
+  updateDoc,
+  setDoc,
   handleFirestoreError,
   OperationType,
   type User
@@ -137,6 +142,8 @@ export default function App() {
   const [authError, setAuthError] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
+  const [isAdminView, setIsAdminView] = useState(window.location.pathname === '/admin');
+  const [notifications, setNotifications] = useState<{id: string, message: string, createdAt: string}[]>([]);
 
   // PDF Export State
   const reportRef = useRef<HTMLDivElement>(null);
@@ -184,11 +191,37 @@ export default function App() {
     }
   };
 
-  useEffect(() => {
-    localStorage.setItem('pocket_lang', lang);
-  }, [lang]);
-
   const CATEGORIES = t.categories;
+
+  // Global Notifications Listener
+  useEffect(() => {
+    if (!user) return;
+    const q = query(collection(db, 'notifications'), orderBy('createdAt', 'desc'), limit(5));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setNotifications(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any);
+    });
+    return () => unsubscribe();
+  }, [user]);
+
+  // Handle URL change
+  useEffect(() => {
+    const handlePopState = () => {
+      setIsAdminView(window.location.pathname === '/admin');
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  const adminEmail = 'mohammadmahim2007@gmail.com';
+
+  if (isAdminView) {
+    if (!user || user.email !== adminEmail) {
+      window.history.pushState({}, '', '/');
+      setIsAdminView(false);
+    } else {
+      return <AdminDashboard onBack={() => { window.history.pushState({}, '', '/'); setIsAdminView(false); }} adminEmail={adminEmail} />;
+    }
+  }
 
   const categoryIcons: Record<string, React.ReactNode> = {
     'খাবার': <Utensils className="w-4 h-4" />,
@@ -280,7 +313,7 @@ export default function App() {
     };
     checkRedirect();
 
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (!isMounted) return;
       
       const isEmailPasswordUser = currentUser?.providerData?.some(p => p.providerId === 'password');
@@ -292,8 +325,47 @@ export default function App() {
         setIsVerifying(false);
       }
       
-      setUser(currentUser);
       if (currentUser) {
+        // Sync user to Firestore
+        try {
+          const userDocRef = doc(db, 'users', currentUser.uid);
+          const userDoc = await getDocs(query(collection(db, 'users'), where('email', '==', currentUser.email)));
+          
+          // Check if blocked
+          const userData = userDoc.docs[0]?.data();
+          if (userData?.blocked) {
+            await signOut(auth);
+            showDialog(t.error, lang === 'bn' ? 'আপনার অ্যাকাউন্টটি ব্লক করা হয়েছে।' : 'Your account has been blocked.', 'error');
+            setUser(null);
+            setLoading(false);
+            return;
+          }
+
+          // Update/Create user record
+          const now = new Date().toISOString();
+          const userPayload = {
+            displayName: currentUser.displayName || 'User',
+            email: currentUser.email || '',
+            lastLogin: now,
+            updatedAt: now,
+            photoURL: currentUser.photoURL || ''
+          };
+
+          if (userDoc.empty) {
+            // New user in our collection
+            await setDoc(userDocRef, {
+              ...userPayload,
+              createdAt: now,
+              blocked: false
+            });
+          } else {
+            // Existing user, update lastLogin
+            await updateDoc(userDocRef, userPayload);
+          }
+        } catch (err) {
+          console.error('Error syncing user:', err);
+        }
+
         setNewDisplayName(currentUser.displayName || '');
         setNewPhotoURL(currentUser.photoURL || '');
       } else {
@@ -302,6 +374,8 @@ export default function App() {
           if (isMounted) setLoading(false);
         }, 30);
       }
+      setUser(currentUser);
+      setLoading(false);
     });
 
     return () => {
@@ -1037,8 +1111,32 @@ export default function App() {
       </header>
 
       <main className="max-w-md mx-auto px-6 pt-6 space-y-6">
-        {/* Main Balance Card */}
-        <section className="relative group">
+        <AnimatePresence mode="popLayout">
+          {/* Global Broadcast Notifications */}
+          {notifications.length > 0 && (
+            <section className="space-y-3">
+              {notifications.map(notif => (
+                <motion.div 
+                  key={notif.id}
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  className="bg-emerald-50 border border-emerald-100 p-5 rounded-[2.5rem] flex items-start gap-4 shadow-sm"
+                >
+                  <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 flex items-center justify-center shrink-0">
+                    <Bell className="w-5 h-5 text-emerald-600" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-emerald-900 text-xs font-black tracking-tight mb-1 leading-relaxed">{notif.message}</p>
+                    <p className="text-[9px] font-bold text-emerald-600/60 uppercase tracking-widest">{format(new Date(notif.createdAt), 'hh:mm a, MMM d')}</p>
+                  </div>
+                </motion.div>
+              ))}
+            </section>
+          )}
+
+          {/* Main Balance Card */}
+          <section className="relative group">
           <div className="absolute inset-0 bg-emerald-500 blur-[40px] opacity-10 group-hover:opacity-20 transition-opacity rounded-[2.5rem]" />
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
@@ -1362,7 +1460,8 @@ export default function App() {
             </AnimatePresence>
           </div>
         </section>
-      </main>
+      </AnimatePresence>
+    </main>
 
       {/* Floating Action Button */}
       <div className="fixed bottom-10 right-6 z-50">
