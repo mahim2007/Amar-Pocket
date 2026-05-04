@@ -266,6 +266,12 @@ export default function App() {
         setAdminAuthError('Access Denied: You are not authorized to view this panel.');
         setUser(null);
       } else {
+        if (!result.user.emailVerified) {
+          setIsVerifying(true);
+          await sendEmailVerification(result.user);
+          setAdminAuthError(t.verifyEmailSent.replace('{email}', result.user.email || ''));
+          return;
+        }
         console.log('Admin verified, setting user state');
         setUser(result.user);
         // The isAdminView switch will happen automatically on re-render
@@ -333,7 +339,9 @@ export default function App() {
   if (isAdminView) {
     const isActuallyAdmin = user && user.email?.toLowerCase() === adminEmail.toLowerCase();
 
-    if (!isActuallyAdmin) {
+    if (user && isActuallyAdmin && !user.emailVerified) {
+      // Let the main verification view handle it below
+    } else if (!isActuallyAdmin) {
       return (
         <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-100 via-slate-50 to-slate-50">
           <motion.div 
