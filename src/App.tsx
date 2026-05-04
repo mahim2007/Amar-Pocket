@@ -75,9 +75,6 @@ import {
   sendEmailVerification,
   reload,
   sendPasswordResetEmail,
-  sendSignInLinkToEmail,
-  isSignInWithEmailLink,
-  signInWithEmailLink,
   collection, 
   addDoc, 
   query, 
@@ -166,6 +163,8 @@ export default function App() {
   // Admin Auth States
   const [adminAuthLoading, setAdminAuthLoading] = useState(false);
   const [adminAuthError, setAdminAuthError] = useState('');
+  const [adminEmailInput, setAdminEmailInput] = useState('');
+  const [adminPasswordInput, setAdminPasswordInput] = useState('');
 
   useEffect(() => {
     const saved = localStorage.getItem('pocket_lang');
@@ -182,11 +181,14 @@ export default function App() {
   const t = translations[lang];
   const locale = lang === 'bn' ? bn : enUS;
 
-  const handleAdminGoogleLogin = async () => {
+  const handleAdminEmailPasswordLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!adminEmailInput || !adminPasswordInput) return;
+    
     setAdminAuthLoading(true);
     setAdminAuthError('');
     try {
-      const result = await signInWithPopup(auth, googleProvider);
+      const result = await signInWithEmailAndPassword(auth, adminEmailInput, adminPasswordInput);
       const userEmail = result.user.email?.toLowerCase();
       
       if (userEmail !== adminEmail.toLowerCase()) {
@@ -196,10 +198,12 @@ export default function App() {
     } catch (error: any) {
       console.error('Admin login error:', error);
       let errorMsg = error.message;
-      if (error.code === 'auth/network-request-failed') {
-        errorMsg = 'Network request failed. Please check your internet connection, disable ad-blockers, or try using a different browser.';
-      } else if (error.code === 'auth/popup-blocked') {
-        errorMsg = 'Popup blocked! Please allow popups for this site to sign in with Google.';
+      if (error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
+        errorMsg = 'Incorrect password or email. Please try again.';
+      } else if (error.code === 'auth/user-not-found') {
+        errorMsg = 'Admin account not found.';
+      } else if (error.code === 'auth/network-request-failed') {
+        errorMsg = 'Network request failed. Please check your internet connection.';
       }
       setAdminAuthError(errorMsg);
     } finally {
@@ -264,7 +268,7 @@ export default function App() {
             
             <div className="text-center mb-8">
               <h1 className="text-2xl font-black text-slate-900 tracking-tight mb-2">Admin Control</h1>
-              <p className="text-slate-400 font-medium text-sm">Please sign in with Google to access the dashboard.</p>
+              <p className="text-slate-400 font-medium text-sm">Sign in with credentials to access the dashboard.</p>
             </div>
 
             {adminAuthError && (
@@ -274,23 +278,46 @@ export default function App() {
               </div>
             )}
 
-            <button 
-              onClick={handleAdminGoogleLogin}
-              disabled={adminAuthLoading}
-              className="w-full bg-white border-2 border-slate-100 text-slate-900 py-4 rounded-[1.5rem] font-bold text-sm flex items-center justify-center gap-3 shadow-sm active:scale-95 transition-all hover:bg-slate-50 disabled:opacity-50"
-            >
-              {adminAuthLoading ? (
-                <Clock className="w-5 h-5 animate-spin text-slate-400" />
-              ) : (
-                <svg className="w-5 h-5" viewBox="0 0 24 24">
-                  <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-                  <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-                  <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
-                  <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
-                </svg>
-              )}
-              {adminAuthLoading ? 'Verifying...' : 'Sign in with Google'}
-            </button>
+            <form onSubmit={handleAdminEmailPasswordLogin} className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Email Address</label>
+                <div className="relative">
+                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
+                  <input 
+                    type="email" 
+                    placeholder="admin@example.com"
+                    value={adminEmailInput}
+                    onChange={(e) => setAdminEmailInput(e.target.value)}
+                    className="w-full bg-slate-50 border-none rounded-2xl py-4 pl-12 pr-4 text-sm font-medium focus:ring-2 focus:ring-slate-900/10 transition-all outline-none"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">Password</label>
+                <div className="relative">
+                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
+                  <input 
+                    type="password" 
+                    placeholder="••••••••"
+                    value={adminPasswordInput}
+                    onChange={(e) => setAdminPasswordInput(e.target.value)}
+                    className="w-full bg-slate-50 border-none rounded-2xl py-4 pl-12 pr-4 text-sm font-medium focus:ring-2 focus:ring-slate-900/10 transition-all outline-none"
+                    required
+                  />
+                </div>
+              </div>
+
+              <button 
+                type="submit"
+                disabled={adminAuthLoading}
+                className="w-full bg-slate-900 text-white py-5 rounded-[1.5rem] font-black text-sm shadow-xl shadow-slate-900/10 active:scale-95 transition-all hover:bg-slate-800 disabled:opacity-50 flex items-center justify-center gap-3"
+              >
+                {adminAuthLoading && <Clock className="w-4 h-4 animate-spin" />}
+                {adminAuthLoading ? 'Authenticating...' : 'Sign In as Admin'}
+              </button>
+            </form>
 
             <button 
               type="button"
@@ -453,10 +480,7 @@ export default function App() {
         setNewDisplayName(currentUser.displayName || '');
         setNewPhotoURL(currentUser.photoURL || '');
       } else {
-        // Reduced timeout for even faster feel
-        setTimeout(() => {
-          if (isMounted) setLoading(false);
-        }, 30);
+        setLoading(false);
       }
       setUser(currentUser);
       setLoading(false);
