@@ -45,7 +45,8 @@ import {
   Gift,
   MoreHorizontal,
   Calendar,
-  Bell
+  Bell,
+  ShieldCheck
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { format, subDays, isAfter } from 'date-fns';
@@ -215,7 +216,19 @@ export default function App() {
   const adminEmail = 'mohammadmahim2007@gmail.com';
 
   if (isAdminView) {
-    if (!user || user.email !== adminEmail) {
+    if (loading) {
+      return (
+        <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-center">
+          <div className="w-16 h-16 bg-white rounded-3xl shadow-xl flex items-center justify-center mb-6 animate-pulse">
+            <ShieldCheck className="w-8 h-8 text-emerald-500" />
+          </div>
+          <h2 className="text-xl font-black text-slate-900 mb-2">Verifying Admin Access</h2>
+          <p className="text-slate-400 font-medium text-sm animate-pulse">Please wait while we secure your session...</p>
+        </div>
+      );
+    }
+    
+    if (!user || user.email?.toLowerCase() !== adminEmail.toLowerCase()) {
       window.history.pushState({}, '', '/');
       setIsAdminView(false);
     } else {
