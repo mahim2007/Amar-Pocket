@@ -159,6 +159,33 @@ export default function App() {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [lang, setLang] = useState<Language>('en');
   const [initialLang, setInitialLang] = useState<Language>('en');
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [dismissedNotifications, setDismissedNotifications] = useState<string[]>([]);
+  
+  // Load dismissed notifications
+  useEffect(() => {
+    const saved = localStorage.getItem('dismissed_notifs');
+    if (saved) {
+      try {
+        setDismissedNotifications(JSON.parse(saved));
+      } catch (e) {
+        console.error('Failed to parse dismissed notifications');
+      }
+    }
+  }, []);
+
+  // Save dismissed notifications
+  useEffect(() => {
+    localStorage.setItem('dismissed_notifs', JSON.stringify(dismissedNotifications));
+  }, [dismissedNotifications]);
+
+  const activeNotifications = useMemo(() => {
+    return notifications.filter(n => !dismissedNotifications.includes(n.id));
+  }, [notifications, dismissedNotifications]);
+
+  const dismissNotification = (id: string) => {
+    setDismissedNotifications(prev => [...prev, id]);
+  };
   
   // Admin Auth States
   const [adminAuthLoading, setAdminAuthLoading] = useState(false);
@@ -1228,40 +1255,30 @@ export default function App() {
               <h2 className="font-bold text-sm text-slate-800">{user.displayName || t.user}</h2>
             </div>
           </div>
-          <button 
-            onClick={handleLogout} 
-            className="w-10 h-10 flex items-center justify-center bg-slate-100 text-slate-500 rounded-2xl hover:bg-rose-50 hover:text-rose-500 transition-all font-bold"
-          >
-             <LogOut className="w-5 h-5" />
-          </button>
+          
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={() => setIsNotificationsOpen(true)}
+              className="relative w-10 h-10 flex items-center justify-center bg-slate-50 text-slate-500 rounded-2xl hover:bg-emerald-50 hover:text-emerald-600 transition-all active:scale-95 group"
+            >
+              <Bell className="w-5 h-5 group-hover:animate-swing" />
+              {activeNotifications.length > 0 && (
+                <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-rose-500 rounded-full border-2 border-white" />
+              )}
+            </button>
+            
+            <button 
+              onClick={handleLogout} 
+              className="w-10 h-10 flex items-center justify-center bg-slate-100 text-slate-500 rounded-2xl hover:bg-rose-50 hover:text-rose-500 transition-all font-bold"
+            >
+              <LogOut className="w-5 h-5" />
+            </button>
+          </div>
         </div>
       </header>
 
       <main className="max-w-md mx-auto px-6 pt-6 space-y-6">
         <AnimatePresence mode="popLayout">
-          {/* Global Broadcast Notifications */}
-          {notifications.length > 0 && (
-            <section className="space-y-3">
-              {notifications.map(notif => (
-                <motion.div 
-                  key={notif.id}
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.95 }}
-                  className="bg-emerald-50 border border-emerald-100 p-5 rounded-[2.5rem] flex items-start gap-4 shadow-sm"
-                >
-                  <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 flex items-center justify-center shrink-0">
-                    <Bell className="w-5 h-5 text-emerald-600" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-emerald-900 text-xs font-black tracking-tight mb-1 leading-relaxed">{notif.message}</p>
-                    <p className="text-[9px] font-bold text-emerald-600/60 uppercase tracking-widest">{format(new Date(notif.createdAt), 'hh:mm a, MMM d')}</p>
-                  </div>
-                </motion.div>
-              ))}
-            </section>
-          )}
-
           {/* Main Balance Card */}
           <section className="relative group">
           <div className="absolute inset-0 bg-emerald-500 blur-[40px] opacity-10 group-hover:opacity-20 transition-opacity rounded-[2.5rem]" />
@@ -1936,6 +1953,90 @@ export default function App() {
 
       {/* --- CUSTOM DIALOG / ALERT --- */}
       {renderDialog()}
+
+      {/* Notifications Modal */}
+      <AnimatePresence>
+        {isNotificationsOpen && (
+          <div className="fixed inset-0 z-[110] flex items-end sm:items-center justify-center p-0 sm:p-6">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsNotificationsOpen(false)}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              className="relative w-full max-w-md bg-white rounded-t-[3rem] sm:rounded-[4rem] p-8 pb-12 shadow-2xl max-h-[85vh] flex flex-col"
+            >
+              <div className="flex justify-between items-center mb-8">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-[1.25rem] bg-slate-900 flex items-center justify-center shadow-lg shadow-slate-900/20">
+                    <Bell className="w-6 h-6 text-emerald-400" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-black text-slate-900 tracking-tight">Notifications</h3>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">Stay updated</p>
+                  </div>
+                </div>
+                <button onClick={() => setIsNotificationsOpen(false)} className="p-3 bg-slate-50 text-slate-400 rounded-2xl hover:bg-slate-100 transition-all">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto no-scrollbar space-y-4">
+                {activeNotifications.length === 0 ? (
+                  <div className="py-20 text-center">
+                    <div className="w-24 h-24 bg-slate-50 rounded-[2.5rem] flex items-center justify-center mx-auto mb-6">
+                      <Bell className="w-10 h-10 text-slate-200" />
+                    </div>
+                    <p className="text-slate-400 font-bold text-sm">No new notifications</p>
+                  </div>
+                ) : (
+                  activeNotifications.map((notif, idx) => (
+                    <motion.div 
+                      key={notif.id}
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: idx * 0.05 }}
+                      className="bg-slate-50 p-6 rounded-[2.5rem] border border-slate-100 flex items-start gap-4 group relative"
+                    >
+                      <div className="w-10 h-10 rounded-2xl bg-white shadow-sm flex items-center justify-center shrink-0">
+                        <Bell className="w-4 h-4 text-emerald-500" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-slate-900 text-xs font-bold leading-relaxed mb-1 pr-8 break-words">{notif.message}</p>
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{format(new Date(notif.createdAt), 'hh:mm a, MMM d')}</p>
+                      </div>
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          dismissNotification(notif.id);
+                        }}
+                        className="p-2 bg-white text-slate-300 rounded-xl hover:bg-rose-50 hover:text-rose-500 transition-all sm:opacity-0 group-hover:opacity-100"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </motion.div>
+                  ))
+                )}
+              </div>
+
+              {activeNotifications.length > 0 && (
+                <button 
+                  onClick={() => setDismissedNotifications(notifications.map(n => n.id))}
+                  className="mt-8 py-5 w-full bg-slate-50 rounded-2xl text-slate-400 font-black text-[10px] uppercase tracking-[0.2em] hover:text-slate-900 hover:bg-slate-100 transition-all"
+                >
+                  Clear All Notifications
+                </button>
+              )}
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* --- HIDDEN REPORT COMPONENT FOR PDF CAPTURE --- */}
       <div className="fixed left-[-9999px] top-[-9999px]">
