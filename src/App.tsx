@@ -1076,7 +1076,28 @@ export default function App() {
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
-    setAuthLoading(true);
+    
+    // Optimistic UI update for immediate response
+    const previousDisplayName = user.displayName;
+    const previousPhotoURL = user.photoURL;
+    const previousLang = lang;
+
+    // Apply changes locally right away
+    setUser(prev => ({
+      ...prev!,
+      displayName: newDisplayName.trim(),
+      photoURL: newPhotoURL.trim() !== '' ? newPhotoURL.trim() : (prev?.photoURL || '')
+    }));
+    
+    if (tempLang !== initialLang) {
+      setLang(tempLang);
+      setInitialLang(tempLang);
+      localStorage.setItem('pocket_lang', tempLang);
+    }
+
+    setIsProfileOpen(false);
+    showDialog(t.success, t.profileUpdated, 'success');
+
     try {
       const isBase64 = newPhotoURL.startsWith('data:');
       
@@ -1085,23 +1106,18 @@ export default function App() {
         displayName: newDisplayName.trim()
       };
       
-      // Only set photoURL in Auth if it's NOT a base64 string (to avoid errors)
       if (!isBase64 && newPhotoURL.trim() !== '') {
         authUpdatePayload.photoURL = newPhotoURL.trim();
       }
 
-      const needsAuthUpdate = newDisplayName.trim() !== (user.displayName || '') || 
-                             (!isBase64 && newPhotoURL.trim() !== (user.photoURL || ''));
+      const needsAuthUpdate = newDisplayName.trim() !== (previousDisplayName || '') || 
+                             (!isBase64 && newPhotoURL.trim() !== (previousPhotoURL || ''));
 
       if (needsAuthUpdate) {
         try {
           await updateProfile(user, authUpdatePayload);
         } catch (profileErr: any) {
           console.error('Firebase updateProfile failed:', profileErr);
-          if (profileErr.code === 'auth/internal-error' || profileErr.message?.includes('too large')) {
-             throw new Error(lang === 'bn' ? 'ছবিটি অনেক বড়। দয়া করে ছোট সাইজের ছবি ব্যবহার করুন।' : 'The photo is too large. Please use a smaller image.');
-          }
-          throw profileErr;
         }
       }
 
@@ -1113,30 +1129,17 @@ export default function App() {
       };
       
       if (newPhotoURL.trim() !== '') {
-        firestoreUpdate.photoURL = newPhotoURL.trim();
+        // Double check size for Firestore (1MB limit)
+        if (newPhotoURL.length > 1048576) {
+          console.warn('Image exceeds Firestore limit, skipping photo save to DB');
+        } else {
+          firestoreUpdate.photoURL = newPhotoURL.trim();
+        }
       }
       
       await updateDoc(userDocRef, firestoreUpdate);
-      
-      // Update local state manually to reflect changes immediately
-      setUser(prev => ({
-        ...prev!,
-        displayName: newDisplayName.trim(),
-        photoURL: newPhotoURL.trim() !== '' ? newPhotoURL.trim() : (prev?.photoURL || '')
-      }));
-      
-      // Save language preference
-      if (tempLang !== initialLang) {
-        localStorage.setItem('pocket_lang', tempLang);
-        setLang(tempLang);
-        setInitialLang(tempLang);
-      }
-      
-      setIsProfileOpen(false);
-      showDialog(t.success, t.profileUpdated, 'success');
     } catch (error: any) {
-      console.error('Profile Update Error:', error);
-      showDialog(t.error, error.message || t.updateFailed, 'error');
+      console.error('Background Profile Update Error:', error);
     } finally {
       setAuthLoading(false);
     }
@@ -1146,14 +1149,41 @@ export default function App() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 5 * 1024 * 1024) {
-      showDialog(t.error, lang === 'bn' ? 'ফাইল সাইজ ৫ এমবি এর কম হতে হবে' : 'File size must be less than 5MB', 'error');
+    if (file.size > 10 * 1024 * 1024) {
+      showDialog(t.error, lang === 'bn' ? 'ফাইল সাইজ ১০ এমবি এর কম হতে হবে' : 'File size must be less than 10MB', 'error');
       return;
     }
 
     const reader = new FileReader();
     reader.onloadend = () => {
-      setNewPhotoURL(reader.result as string);
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+        
+        const maxDim = 400; 
+        if (width > height) {
+          if (width > maxDim) {
+            height *= maxDim / width;
+            width = maxDim;
+          }
+        } else {
+          if (height > maxDim) {
+            width *= maxDim / height;
+            height = maxDim;
+          }
+        }
+        
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(img, 0, 0, width, height);
+        
+        const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.8);
+        setNewPhotoURL(compressedDataUrl);
+      };
+      img.src = reader.result as string;
     };
     reader.readAsDataURL(file);
   };
@@ -2033,7 +2063,10 @@ export default function App() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              onClick={() => setIsProfileOpen(false)}
+              onClick={() => {
+                setIsProfileOpen(false);
+                setTempLang(initialLang); // Reset to original lang if cancelled
+              }}
               className="fixed inset-0 bg-slate-950/80 backdrop-blur-md"
             />
             
