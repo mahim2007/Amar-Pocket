@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, Suspense, lazy } from 'react';
 import { 
   Plus, 
   Minus, 
@@ -53,13 +53,12 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { format, subDays, isAfter } from 'date-fns';
 import { bn, enUS } from 'date-fns/locale';
-import { jsPDF } from "jspdf";
-import html2canvas from 'html2canvas';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
 import { translations, type Language } from './translations';
-import AdminDashboard from './components/AdminDashboard';
+
+const AdminDashboard = lazy(() => import('./components/AdminDashboard'));
 
 // Firebase imports
 import { 
@@ -494,7 +493,18 @@ export default function App() {
         </div>
       );
     } else {
-      return <AdminDashboard onBack={() => { window.history.pushState({}, '', '/'); setIsAdminView(false); }} adminEmail={adminEmail} />;
+      return (
+        <Suspense fallback={
+          <div className="min-h-screen flex items-center justify-center bg-slate-50">
+            <div className="flex flex-col items-center gap-4">
+              <Loader2 className="w-10 h-10 animate-spin text-emerald-500" />
+              <p className="text-slate-400 font-bold text-[10px] uppercase tracking-widest animate-pulse">{t.loading}</p>
+            </div>
+          </div>
+        }>
+          <AdminDashboard onBack={() => { window.history.pushState({}, '', '/'); setIsAdminView(false); }} adminEmail={adminEmail} />
+        </Suspense>
+      );
     }
   }
 
@@ -594,43 +604,24 @@ export default function App() {
       const isEmailPasswordUser = currentUser?.providerData?.some(p => p.providerId === 'password');
       const needsEmailVerification = currentUser && !currentUser.emailVerified && isEmailPasswordUser;
       
-      if (needsEmailVerification) {
-        setIsVerifying(true);
-      } else {
-        setIsVerifying(false);
-      }
+      setIsVerifying(!!needsEmailVerification);
       
-      // Set user and stop loading screen immediately once auth is determined
-      // Don't wait for the firestore sync below to finish
+      // Stop loading screen immediately as soon as we have an auth answer
       setUser(currentUser);
       setLoading(false);
 
       if (currentUser) {
-        // Sync user to Firestore in background
-        try {
-          const userDocRef = doc(db, 'users', currentUser.uid);
-          // Set initial user state with common fields so it's usable right away
-          const enhancedUser = {
-            ...currentUser,
-            displayName: currentUser.displayName || 'User',
-            photoURL: currentUser.photoURL || ''
-          };
-          setUser(enhancedUser);
-          
-          // Non-blocking sync
-          syncUserRecord(currentUser, userDocRef).then((fullUserData) => {
-            if (fullUserData && isMounted) {
-              setUser(prev => ({ ...prev, ...fullUserData }));
-            }
-          });
-        } catch (err) {
-          console.error('Error syncing user:', err);
-        }
-        
         setNewDisplayName(currentUser.displayName || '');
         setNewPhotoURL(currentUser.photoURL || '');
+
+        // Sync user to Firestore in background
+        const userDocRef = doc(db, 'users', currentUser.uid);
+        syncUserRecord(currentUser, userDocRef).then((fullUserData) => {
+          if (fullUserData && isMounted) {
+            setUser(prev => ({ ...prev, ...fullUserData }));
+          }
+        }).catch(err => console.error('Background sync error:', err));
       }
-      setLoading(false);
     });
 
     return () => {
@@ -763,6 +754,7 @@ export default function App() {
     if (!dailyReportRef.current) return;
     setIsDownloadingDaily(true);
     try {
+      const html2canvas = (await import('html2canvas')).default;
       const canvas = await html2canvas(dailyReportRef.current, {
         scale: 4, // Higher scale for better quality
         backgroundColor: '#f8fafc',
@@ -1121,41 +1113,45 @@ export default function App() {
     reader.readAsDataURL(file);
   };
 
-  // Improved PDF Export using html2canvas to support Bengali
-  const exportPDFWithCanvas = async (days: number | 'all') => {
-    setIsExporting(true);
-    setExportDays(days);
-    
-    // Wait for state update and rendering
-    setTimeout(async () => {
-      const element = reportRef.current;
-      if (!element) return;
+    // PDF Export using html2canvas to support Bengali
+    const exportPDFWithCanvas = async (days: number | 'all') => {
+      setIsExporting(true);
+      setExportDays(days);
+      
+      // Wait for state update and rendering
+      setTimeout(async () => {
+        const element = reportRef.current;
+        if (!element) return;
+  
+        try {
+          // Dynamic imports to reduce initial bundle size
+          const html2canvas = (await import('html2canvas')).default;
+          const { jsPDF } = await import('jspdf');
 
-      try {
-        // Higher scale for 2x clarity, but keeping it reasonable for file size
-        const canvas = await html2canvas(element, {
-          scale: 2, 
-          useCORS: true,
-          logging: false,
-          backgroundColor: '#ffffff'
-        });
-        
-        // Use 0.8 quality for crisp text with decent compression
-        const imgData = canvas.toDataURL('image/jpeg', 0.8); 
-        const pdf = new jsPDF('p', 'mm', 'a4', true);
-        const imgWidth = 210;
-        const imgHeight = (canvas.height * imgWidth) / canvas.width;
-        
-        pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, imgHeight, undefined, 'FAST');
-        pdf.save(`${user?.displayName || 'pocket'}_statement_${days === 'all' ? (lang === 'bn' ? 'total' : 'total') : days + 'days'}.pdf`);
-      } catch (err) {
-        console.error('PDF Export failed', err);
-        showDialog(t.error, t.exportError, 'error');
-      } finally {
-        setIsExporting(false);
-      }
-    }, 250); // Reduced delay for faster export feel
-  };
+          // Higher scale for 2x clarity
+          const canvas = await html2canvas(element, {
+            scale: 2, 
+            useCORS: true,
+            logging: false,
+            backgroundColor: '#ffffff'
+          });
+          
+          // Use 0.8 quality for crisp text with decent compression
+          const imgData = canvas.toDataURL('image/jpeg', 0.8); 
+          const pdf = new jsPDF('p', 'mm', 'a4', true);
+          const imgWidth = 210;
+          const imgHeight = (canvas.height * imgWidth) / canvas.width;
+          
+          pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, imgHeight, undefined, 'FAST');
+          pdf.save(`${user?.displayName || 'pocket'}_statement_${days === 'all' ? (lang === 'bn' ? 'total' : 'total') : days + 'days'}.pdf`);
+        } catch (err) {
+          console.error('PDF Export failed', err);
+          showDialog(t.error, t.exportError, 'error');
+        } finally {
+          setIsExporting(false);
+        }
+      }, 100); 
+    };
 
   const renderDialog = () => (
     <AnimatePresence>
