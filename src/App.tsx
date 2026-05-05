@@ -336,11 +336,69 @@ export default function App() {
 
   const adminEmail = 'mohammadmahim2007@gmail.com';
 
+  const renderVerificationView = () => {
+    if (!user) return null;
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6 relative overflow-hidden">
+        <div className="absolute top-[-20%] left-[-10%] w-[60%] h-[60%] bg-blue-500/5 blur-[120px] rounded-full" />
+        
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="max-w-md w-full bg-white p-10 rounded-[3rem] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.1)] text-center border border-slate-100 z-10 relative"
+        >
+          <div className="w-20 h-20 bg-blue-50 text-blue-500 rounded-[2.2rem] flex items-center justify-center mx-auto mb-8 shadow-sm ring-4 ring-white">
+            <Mail className="w-10 h-10" />
+          </div>
+          
+          <h2 className="text-2xl font-black text-slate-900 mb-4 tracking-tight">{t.verifyEmail}</h2>
+          <p className="text-slate-500 text-sm font-medium mb-10 leading-relaxed px-4">
+            {t.verifyEmailSent.replace('{email}', user.email || '')}
+          </p>
+          
+          <div className="space-y-4">
+            <button 
+              onClick={checkEmailVerificationStatus}
+              disabled={authLoading}
+              className="w-full bg-slate-900 text-white py-5 rounded-2xl font-black text-sm shadow-xl shadow-slate-900/20 active:scale-[0.98] transition-all flex items-center justify-center gap-3"
+            >
+              {authLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <LogIn className="w-5 h-5" />}
+              {t.clickedLink}
+            </button>
+            
+            <button 
+              onClick={() => {
+                if (auth.currentUser) {
+                  sendEmailVerification(auth.currentUser);
+                  showDialog(t.success, t.verificationSent, 'success');
+                }
+              }}
+              className="w-full bg-slate-50 text-slate-500 py-4.5 rounded-2xl font-black text-xs hover:bg-slate-100 transition-all border border-slate-100"
+            >
+              {t.resendEmail}
+            </button>
+            
+            <button 
+              onClick={() => {
+                signOut(auth);
+                setIsVerifying(false);
+              }}
+              className="w-full text-slate-400 font-bold text-xs pt-4 hover:text-slate-600 transition-colors"
+            >
+              {t.useOtherAccount}
+            </button>
+          </div>
+        </motion.div>
+        {renderDialog()}
+      </div>
+    );
+  };
+
   if (isAdminView) {
     const isActuallyAdmin = user && user.email?.toLowerCase() === adminEmail.toLowerCase();
 
     if (user && isActuallyAdmin && !user.emailVerified) {
-      // Let the main verification view handle it below
+      return renderVerificationView();
     } else if (!isActuallyAdmin) {
       return (
         <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-100 via-slate-50 to-slate-50">
@@ -1243,60 +1301,7 @@ export default function App() {
 
   // --- Verification View ---
   if (user && isVerifying) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6 relative overflow-hidden">
-        <div className="absolute top-[-20%] left-[-10%] w-[60%] h-[60%] bg-blue-500/5 blur-[120px] rounded-full" />
-        
-        <motion.div 
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="max-w-md w-full bg-white p-10 rounded-[3rem] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.1)] text-center border border-slate-100 z-10 relative"
-        >
-          <div className="w-20 h-20 bg-blue-50 text-blue-500 rounded-[2.2rem] flex items-center justify-center mx-auto mb-8 shadow-sm ring-4 ring-white">
-            <Mail className="w-10 h-10" />
-          </div>
-          
-          <h2 className="text-2xl font-black text-slate-900 mb-4 tracking-tight">{t.verifyEmail}</h2>
-          <p className="text-slate-500 text-sm font-medium mb-10 leading-relaxed px-4">
-            {t.verifyEmailSent.replace('{email}', user.email || '')}
-          </p>
-          
-          <div className="space-y-4">
-            <button 
-              onClick={checkEmailVerificationStatus}
-              disabled={authLoading}
-              className="w-full bg-slate-900 text-white py-5 rounded-2xl font-black text-sm shadow-xl shadow-slate-900/20 active:scale-[0.98] transition-all flex items-center justify-center gap-3"
-            >
-              {authLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <LogIn className="w-5 h-5" />}
-              {t.clickedLink}
-            </button>
-            
-            <button 
-              onClick={() => {
-                if (auth.currentUser) {
-                  sendEmailVerification(auth.currentUser);
-                  showDialog(t.success, t.verificationSent, 'success');
-                }
-              }}
-              className="w-full bg-slate-50 text-slate-500 py-4.5 rounded-2xl font-black text-xs hover:bg-slate-100 transition-all border border-slate-100"
-            >
-              {t.resendEmail}
-            </button>
-            
-            <button 
-              onClick={() => {
-                signOut(auth);
-                setIsVerifying(false);
-              }}
-              className="w-full text-slate-400 font-bold text-xs pt-4 hover:text-slate-600 transition-colors"
-            >
-              {t.useOtherAccount}
-            </button>
-          </div>
-        </motion.div>
-        {renderDialog()}
-      </div>
-    );
+    return renderVerificationView();
   }
 
   // --- Dashboard ---
