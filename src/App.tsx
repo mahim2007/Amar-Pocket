@@ -1651,7 +1651,7 @@ export default function App() {
                         "w-12 h-12 rounded-[1.25rem] flex items-center justify-center shrink-0 shadow-sm",
                         tx.type === 'income' ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-500"
                       )}>
-                        {tx.type === 'income' ? <Minus className="w-5 h-5" /> : <PlusCircle className="w-5 h-5" />}
+                        {tx.type === 'income' ? <PlusCircle className="w-5 h-5" /> : <Minus className="w-5 h-5" />}
                       </div>
                       <div>
                         <h4 className="font-black text-sm text-slate-800 mb-0.5">{tx.category}</h4>
