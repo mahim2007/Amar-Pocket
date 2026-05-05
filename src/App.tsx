@@ -119,7 +119,9 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [trashItems, setTrashItems] = useState<any[]>([]);
   const [isAdding, setIsAdding] = useState(false);
+  const [isTrashOpen, setIsTrashOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isDownloadingDaily, setIsDownloadingDaily] = useState(false);
   const [amount, setAmount] = useState('');
@@ -266,15 +268,22 @@ export default function App() {
         setAdminAuthError('Access Denied: You are not authorized to view this panel.');
         setUser(null);
       } else {
+        console.log('Admin match found, checking verification status...');
+        setUser(result.user);
+        
         if (!result.user.emailVerified) {
           setIsVerifying(true);
-          await sendEmailVerification(result.user);
-          setAdminAuthError(t.verifyEmailSent.replace('{email}', result.user.email || ''));
+          try {
+            await sendEmailVerification(result.user);
+            setAdminAuthError(t.verifyEmailSent.replace('{email}', result.user.email || ''));
+          } catch (err) {
+            console.error('Failed to send verification email:', err);
+          }
           return;
         }
+        
         console.log('Admin verified, setting user state');
-        setUser(result.user);
-        // The isAdminView switch will happen automatically on re-render
+        setIsVerifying(false);
       }
     } catch (error: any) {
       console.error('Admin login error detail:', error);
@@ -397,9 +406,12 @@ export default function App() {
   if (isAdminView) {
     const isActuallyAdmin = user && user.email?.toLowerCase() === adminEmail.toLowerCase();
 
+    // Force verification view if admin is not verified
     if (user && isActuallyAdmin && !user.emailVerified) {
       return renderVerificationView();
-    } else if (!isActuallyAdmin) {
+    }
+
+    if (!isActuallyAdmin) {
       return (
         <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-100 via-slate-50 to-slate-50">
           <motion.div 
@@ -696,6 +708,33 @@ export default function App() {
     return () => unsubscribe();
   }, [user]);
 
+  // Sync Trash Items
+  useEffect(() => {
+    if (!user) {
+      setTrashItems([]);
+      return;
+    }
+
+    const path = 'trash';
+    const q = query(
+      collection(db, path),
+      where('userId', '==', user.uid),
+      orderBy('deletedAt', 'desc')
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const items = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...(doc.data() as any)
+      }));
+      setTrashItems(items);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, path);
+    });
+
+    return () => unsubscribe();
+  }, [user]);
+
   // Calculations
   const summary = useMemo(() => {
     return transactions.reduce((acc, curr) => {
@@ -958,17 +997,84 @@ export default function App() {
   };
 
   const deleteTransaction = async (id: string) => {
+    const txToDelete = transactions.find(tx => tx.id === id);
+    if (!txToDelete) return;
+
     showDialog(
       t.deleteConfirm,
       t.deleteMessage,
       'confirm',
       async () => {
         try {
+          const pathTrash = 'trash';
+          await addDoc(collection(db, pathTrash), {
+            originalId: txToDelete.id,
+            data: {
+              amount: txToDelete.amount,
+              category: txToDelete.category,
+              type: txToDelete.type,
+              date: txToDelete.date,
+              time: txToDelete.time,
+              note: txToDelete.note,
+              userId: txToDelete.userId,
+              createdAt: txToDelete.createdAt
+            },
+            deletedAt: new Date().toISOString(),
+            userId: user?.uid
+          });
+
           await deleteDoc(doc(db, 'transactions', id));
-          showDialog(t.success, t.recordDeleted, 'success');
+          showDialog(t.success, t.movedToTrash, 'success');
         } catch (error) {
           console.error(error);
           showDialog(t.error, t.recordDeleteFailed, 'error');
+        }
+      }
+    );
+  };
+
+  const restoreTransaction = async (item: any) => {
+    try {
+      await addDoc(collection(db, 'transactions'), item.data);
+      await deleteDoc(doc(db, 'trash', item.id));
+      showDialog(t.success, t.restoreSuccess, 'success');
+    } catch (err) {
+      console.error(err);
+      showDialog(t.error, t.restoreFailed, 'error');
+    }
+  };
+
+  const permanentDelete = async (id: string) => {
+    showDialog(
+      t.deletePermanentlyConfirm,
+      t.deletePermanentlyMessage,
+      'confirm',
+      async () => {
+        try {
+          await deleteDoc(doc(db, 'trash', id));
+        } catch (err) {
+          console.error(err);
+          showDialog(t.error, t.recordDeleteFailed, 'error');
+        }
+      }
+    );
+  };
+
+  const emptyTrash = async () => {
+    if (trashItems.length === 0) return;
+    
+    showDialog(
+      t.emptyTrash,
+      t.deletePermanentlyMessage,
+      'confirm',
+      async () => {
+        try {
+          const promises = trashItems.map(item => deleteDoc(doc(db, 'trash', item.id)));
+          await Promise.all(promises);
+          showDialog(t.success, t.success, 'success');
+        } catch (err) {
+          console.error(err);
+          showDialog(t.error, t.error, 'error');
         }
       }
     );
@@ -1635,7 +1741,7 @@ export default function App() {
                 <motion.div layout className="space-y-3">
                   {filteredTransactions.map((tx, i) => (
                     <motion.div
-                      key={tx.id}
+                      key={`tx-activity-${tx.id}`}
                       layout
                       initial={{ opacity: 0, scale: 0.9 }}
                       animate={{ opacity: 1, scale: 1 }}
@@ -1991,7 +2097,24 @@ export default function App() {
                   </div>
                 </form>
  
-                <div className="mt-8 space-y-4">
+                <div className="mt-8 space-y-3">
+                  <button 
+                    onClick={() => {
+                      setIsProfileOpen(false);
+                      setIsTrashOpen(true);
+                    }}
+                    className="w-full flex items-center gap-4 p-5 rounded-2xl bg-slate-50 border border-slate-100 hover:border-emerald-200 transition-all group"
+                  >
+                    <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                      <Trash2 className="w-6 h-6" />
+                    </div>
+                    <div className="text-left">
+                      <p className="text-sm font-black text-slate-800">{t.trash}</p>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{trashItems.length} {t.records}</p>
+                    </div>
+                    <ChevronRight className="w-5 h-5 text-slate-300 ml-auto" />
+                  </button>
+
                   {deferredPrompt ? (
                     <button 
                       onClick={installApp}
@@ -2081,7 +2204,7 @@ export default function App() {
                 ) : (
                   activeNotifications.map((notif, idx) => (
                     <motion.div 
-                      key={notif.id}
+                      key={`notif-${notif.id}`}
                       initial={{ opacity: 0, x: 20 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: idx * 0.05 }}
@@ -2121,7 +2244,118 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* --- HIDDEN REPORT COMPONENT FOR PDF CAPTURE --- */}
+      {/* Trash Modal */}
+      <AnimatePresence>
+        {isTrashOpen && (
+          <div className="fixed inset-0 z-[110] flex items-end sm:items-center justify-center p-0 sm:p-6 overflow-hidden">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsTrashOpen(false)}
+              className="fixed inset-0 bg-slate-950/80 backdrop-blur-md"
+            />
+            
+            <motion.div
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              className="relative w-full max-w-lg bg-white rounded-t-[3rem] sm:rounded-[3rem] p-8 sm:pb-10 shadow-2xl border-t sm:border border-slate-100 flex flex-col max-h-[85vh] sm:max-h-[80vh] overflow-hidden"
+            >
+              <div className="flex items-center justify-between mb-8 shrink-0">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-rose-50 text-rose-500 rounded-2xl flex items-center justify-center">
+                    <Trash2 className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-black text-slate-900 tracking-tight">{t.trash}</h3>
+                    <p className="text-slate-400 font-bold text-[10px] uppercase tracking-widest">{trashItems.length} {t.records}</p>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  {trashItems.length > 0 && (
+                    <button 
+                      onClick={emptyTrash}
+                      className="p-3 rounded-xl bg-rose-50 text-rose-500 hover:bg-rose-100 transition-colors"
+                    >
+                      <Trash2 className="w-5 h-5" />
+                    </button>
+                  )}
+                  <button 
+                    onClick={() => setIsTrashOpen(false)}
+                    className="p-3 rounded-xl bg-slate-50 text-slate-400 hover:text-slate-600 transition-colors"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="bg-amber-50 p-4 rounded-2xl border border-amber-100 mb-6 flex items-center gap-3">
+                <Info className="w-4 h-4 text-amber-500 shrink-0" />
+                <p className="text-[10px] font-bold text-amber-900 leading-tight">
+                  {t.thirtyDaysNote}
+                </p>
+              </div>
+
+              <div className="flex-1 overflow-y-auto no-scrollbar space-y-4 pb-8">
+                {trashItems.length === 0 ? (
+                  <div className="py-20 text-center">
+                    <div className="w-16 h-16 bg-slate-50 rounded-3xl flex items-center justify-center mx-auto mb-4">
+                      <Trash2 className="w-8 h-8 text-slate-200" />
+                    </div>
+                    <p className="text-slate-400 font-bold text-xs uppercase tracking-widest leading-relaxed">
+                      {t.trashEmpty}
+                    </p>
+                  </div>
+                ) : (
+                  trashItems.map((item) => {
+                    const isOld = !isAfter(new Date(item.deletedAt), subDays(new Date(), 30));
+                    if (isOld) return null;
+                    
+                    return (
+                      <div 
+                        key={`trash-item-${item.id}`}
+                        className="group p-5 bg-white border border-slate-100 rounded-[2rem] shadow-sm flex items-center gap-4"
+                      >
+                        <div className={cn(
+                          "w-10 h-10 rounded-xl flex items-center justify-center shrink-0",
+                          item.data.type === 'income' ? "bg-emerald-50 text-emerald-500" : "bg-rose-50 text-rose-500"
+                        )}>
+                          {item.data.type === 'income' ? <PlusCircle className="w-5 h-5" /> : <Minus className="w-5 h-5" />}
+                        </div>
+                        
+                        <div className="flex-1 min-w-0">
+                          <h4 className="text-sm font-black text-slate-800 truncate">{item.data.category}</h4>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                            {format(new Date(item.data.date), 'dd MMM', { locale })} • {t.amount}: ৳{item.data.amount}
+                          </p>
+                        </div>
+
+                        <div className="flex gap-2">
+                          <button 
+                            onClick={() => restoreTransaction(item)}
+                            className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl hover:bg-emerald-100 transition-all active:scale-95 shadow-sm"
+                            title={t.restore}
+                          >
+                            <History className="w-4 h-4" />
+                          </button>
+                          <button 
+                            onClick={() => permanentDelete(item.id)}
+                            className="p-2.5 bg-rose-50 text-rose-500 rounded-xl hover:bg-rose-100 transition-all active:scale-95 shadow-sm"
+                            title={t.permanentDelete}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
       <div className="fixed left-[-9999px] top-[-9999px]">
         <div 
           ref={reportRef} 

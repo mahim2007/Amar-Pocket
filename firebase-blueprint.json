@@ -38,6 +38,18 @@
         "createdAt": { "type": "string", "format": "date-time" },
         "adminEmail": { "type": "string" }
       }
+    },
+    "trash": {
+      "title": "Trash",
+      "description": "Deleted transactions stored temporarily.",
+      "type": "object",
+      "properties": {
+        "originalId": { "type": "string", "description": "Original transaction ID." },
+        "data": { "$ref": "transaction", "description": "The original transaction data." },
+        "deletedAt": { "type": "string", "format": "date-time", "description": "Timestamp of deletion." },
+        "userId": { "type": "string", "description": "Owner of the record." }
+      },
+      "required": ["originalId", "data", "deletedAt", "userId"]
     }
   },
   "firestore": {
@@ -52,6 +64,10 @@
     "/notifications/{notificationId}": {
       "schema": "notification",
       "description": "System-wide broadcasts."
+    },
+    "/trash/{trashId}": {
+      "schema": "trash",
+      "description": "Soft-deleted transactions."
     }
   }
 }

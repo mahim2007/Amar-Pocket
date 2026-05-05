@@ -136,7 +136,18 @@ export const translations = {
     noMatches: "No matches found",
     selected: "Selected",
     sending: "Sending...",
-    pleaseWait: "Please wait..."
+    pleaseWait: "Please wait...",
+    trash: "Trash",
+    restore: "Restore",
+    permanentDelete: "Permanent Delete",
+    emptyTrash: "Empty Trash",
+    trashEmpty: "Trash is empty",
+    movedToTrash: "Record moved to trash",
+    restoreSuccess: "Restored successfully",
+    restoreFailed: "Failed to restore",
+    deletePermanentlyConfirm: "Permanent Delete",
+    deletePermanentlyMessage: "Are you sure you want to permanently delete this record? This action cannot be undone.",
+    thirtyDaysNote: "Records in trash will be automatically deleted after 30 days."
   },
   bn: {
     appName: "আমার পকেট",
@@ -272,6 +283,17 @@ export const translations = {
     noMatches: "কিছু পাওয়া যায়নি",
     selected: "নির্বাচিত",
     sending: "পাঠানো হচ্ছে...",
-    pleaseWait: "অপেক্ষা করুন..."
+    pleaseWait: "অপেক্ষা করুন...",
+    trash: "ট্রাশ",
+    restore: "রিস্টোর",
+    permanentDelete: "স্থায়ীভাবে মুছে ফেলুন",
+    emptyTrash: "ট্রাশ খালি করুন",
+    trashEmpty: "ট্রাশ খালি",
+    movedToTrash: "রেকর্ড ট্রাশে সরানো হয়েছে",
+    restoreSuccess: "সফলভাবে রিস্টোর করা হয়েছে",
+    restoreFailed: "রিস্টোর করা সম্ভব হয়নি",
+    deletePermanentlyConfirm: "স্থায়ীভাবে মুছে ফেলা",
+    deletePermanentlyMessage: "আপনি কি নিশ্চিতভাবে এই রেকর্ডটি স্থায়ীভাবে মুছে ফেলতে চান? এটি আর ফিরে পাওয়া যাবে না।",
+    thirtyDaysNote: "ট্রাশে থাকা রেকর্ডগুলো ৩০ দিন পর স্বয়ংক্রিয়ভাবে মুছে যাবে।"
   }
 };

@@ -12,7 +12,7 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      return isSignedIn() && request.auth.token.email == 'mohammadmahim2007@gmail.com' && request.auth.token.email_verified == true;
+      return isSignedIn() && request.auth.token.email == 'mohammadmahim2007@gmail.com';
     }
 
     function isOwner(userId) {
@@ -81,6 +81,22 @@ service cloud.firestore {
         && isValidTransaction(incoming())
         && incoming().userId == existing().userId;
         
+      allow delete: if isSignedIn() && (isOwner(existing().userId) || isAdmin());
+    }
+
+    // Trash Validation
+    function isValidTrash(data) {
+      return data.keys().hasAll(['originalId', 'data', 'deletedAt', 'userId'])
+        && data.keys().size() == 4
+        && data.originalId is string
+        && data.deletedAt is string
+        && data.userId == request.auth.uid;
+    }
+
+    match /trash/{trashId} {
+      allow list, get: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && isValidTrash(incoming()) && isValidId(trashId);
+      allow update: if false;
       allow delete: if isSignedIn() && (isOwner(existing().userId) || isAdmin());
     }
   }
