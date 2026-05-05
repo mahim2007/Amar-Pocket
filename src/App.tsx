@@ -1887,7 +1887,7 @@ export default function App() {
                       type === 'income' ? "bg-white text-emerald-600 shadow-xl border border-slate-100" : "text-slate-500"
                     )}
                   >
-                    <ArrowUpCircle className="w-4 h-4" /> {t.income}
+                    <ArrowDownCircle className="w-4 h-4" /> {t.income}
                   </button>
                   <button
                     type="button"
@@ -1897,7 +1897,7 @@ export default function App() {
                       type === 'expense' ? "bg-white text-rose-600 shadow-xl border border-slate-100" : "text-slate-500"
                     )}
                   >
-                    <ArrowDownCircle className="w-4 h-4" /> {t.expense}
+                    <ArrowUpCircle className="w-4 h-4" /> {t.expense}
                   </button>
                 </div>
 
