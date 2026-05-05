@@ -163,6 +163,7 @@ export default function App() {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [lang, setLang] = useState<Language>('en');
   const [initialLang, setInitialLang] = useState<Language>('en');
+  const [tempLang, setTempLang] = useState<Language>('en');
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [dismissedNotifications, setDismissedNotifications] = useState<string[]>([]);
   const [showPassword, setShowPassword] = useState(false);
@@ -777,10 +778,12 @@ export default function App() {
   const handleGoogleLogin = async () => {
     setAuthLoading(true);
     setAuthError('');
+    auth.languageCode = lang; // Align popup language with app language
     
     try {
       // Force popup for this environment
-      await signInWithPopup(auth, googleProvider);
+      const result = await signInWithPopup(auth, googleProvider);
+      console.log('Google Login Success:', result.user.email);
     } catch (error: any) {
       console.error('Google Login Error:', error);
       
@@ -795,11 +798,9 @@ export default function App() {
       } else if (error.code === 'auth/operation-not-allowed') {
         showDialog(t.configProblemTitle, t.configProblemMessage, 'error');
       } else if (error.code === 'auth/invalid-credential') {
-        showDialog(t.error, lang === 'bn' ? 'অকার্যকর ক্রেডেনশিয়াল। দয়া করে ফায়ারবেস কনসোলে ডোমেইন অথরাইজড আছে কিনা চেক করুন।' : 'Invalid credential. Please check if your domain is authorized in Firebase Console.', 'error');
-      } else if (error.code === 'auth/network-request-failed') {
-        showDialog(t.error, lang === 'bn' ? 'নেটওয়ার্ক রিকোয়েস্ট ফেইলড। দয়া করে আপনার ইন্টারনেট কানেকশন চেক করুন বা অ্যাড-ব্লকার অফ করুন।' : 'Network request failed. Please check your internet connection or disable ad-blockers.', 'error');
+        showDialog(t.error, lang === 'bn' ? 'অকার্যকর ক্রেডেনশিয়াল। দয়া করে ফায়ারবেস কনসোলে ডোমেইন অথরাইজড আছে কিনা চেক করুন অথবা আবার চেষ্টা করুন।' : 'Invalid credential. Please check if your domain is authorized or try again.', 'error');
       } else {
-        showDialog(t.login + ' ' + t.error, t.googleLoginFailed + ` (Error: ${error.code})`, 'error');
+        showDialog(t.error, (lang === 'bn' ? 'গুগল লগইন ব্যর্থ হয়েছে: ' : 'Google login failed: ') + (error.message || 'Unknown error'), 'error');
       }
     } finally {
       setAuthLoading(false);
@@ -1077,21 +1078,65 @@ export default function App() {
     if (!user) return;
     setAuthLoading(true);
     try {
-      // Update Firebase Profile if needed
-      if (newDisplayName.trim() !== (user.displayName || '') || newPhotoURL.trim() !== (user.photoURL || '')) {
-        await updateProfile(user, { 
-          displayName: newDisplayName.trim(),
-          photoURL: newPhotoURL.trim()
-        });
+      const isBase64 = newPhotoURL.startsWith('data:');
+      
+      // Update Firebase Auth Profile (Only for display name and non-base64 URLs)
+      const authUpdatePayload: any = { 
+        displayName: newDisplayName.trim()
+      };
+      
+      // Only set photoURL in Auth if it's NOT a base64 string (to avoid errors)
+      if (!isBase64 && newPhotoURL.trim() !== '') {
+        authUpdatePayload.photoURL = newPhotoURL.trim();
+      }
+
+      const needsAuthUpdate = newDisplayName.trim() !== (user.displayName || '') || 
+                             (!isBase64 && newPhotoURL.trim() !== (user.photoURL || ''));
+
+      if (needsAuthUpdate) {
+        try {
+          await updateProfile(user, authUpdatePayload);
+        } catch (profileErr: any) {
+          console.error('Firebase updateProfile failed:', profileErr);
+          if (profileErr.code === 'auth/internal-error' || profileErr.message?.includes('too large')) {
+             throw new Error(lang === 'bn' ? 'ছবিটি অনেক বড়। দয়া করে ছোট সাইজের ছবি ব্যবহার করুন।' : 'The photo is too large. Please use a smaller image.');
+          }
+          throw profileErr;
+        }
+      }
+
+      // Update Firestore with everything including base64 photo
+      const userDocRef = doc(db, 'users', user.uid);
+      const firestoreUpdate: any = {
+        displayName: newDisplayName.trim(),
+        updatedAt: new Date().toISOString()
+      };
+      
+      if (newPhotoURL.trim() !== '') {
+        firestoreUpdate.photoURL = newPhotoURL.trim();
       }
       
+      await updateDoc(userDocRef, firestoreUpdate);
+      
+      // Update local state manually to reflect changes immediately
+      setUser(prev => ({
+        ...prev!,
+        displayName: newDisplayName.trim(),
+        photoURL: newPhotoURL.trim() !== '' ? newPhotoURL.trim() : (prev?.photoURL || '')
+      }));
+      
       // Save language preference
-      localStorage.setItem('pocket_lang', lang);
-      setInitialLang(lang);
+      if (tempLang !== initialLang) {
+        localStorage.setItem('pocket_lang', tempLang);
+        setLang(tempLang);
+        setInitialLang(tempLang);
+      }
+      
       setIsProfileOpen(false);
       showDialog(t.success, t.profileUpdated, 'success');
-    } catch (error) {
-      showDialog(t.error, t.updateFailed, 'error');
+    } catch (error: any) {
+      console.error('Profile Update Error:', error);
+      showDialog(t.error, error.message || t.updateFailed, 'error');
     } finally {
       setAuthLoading(false);
     }
@@ -1101,8 +1146,8 @@ export default function App() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 2 * 1024 * 1024) {
-      showDialog(t.largeFileTitle, t.largeFileMessage, 'error');
+    if (file.size > 5 * 1024 * 1024) {
+      showDialog(t.error, lang === 'bn' ? 'ফাইল সাইজ ৫ এমবি এর কম হতে হবে' : 'File size must be less than 5MB', 'error');
       return;
     }
 
@@ -1418,6 +1463,7 @@ export default function App() {
                 setNewDisplayName(user.displayName || '');
                 setNewPhotoURL(user.photoURL || '');
                 setInitialLang(lang);
+                setTempLang(lang);
                 setIsProfileOpen(true);
               }}
               className="w-10 h-10 rounded-2xl bg-emerald-500 overflow-hidden shadow-lg shadow-emerald-500/20 border-2 border-white active:scale-95 transition-all"
@@ -1434,6 +1480,7 @@ export default function App() {
               setNewDisplayName(user.displayName || '');
               setNewPhotoURL(user.photoURL || '');
               setInitialLang(lang);
+              setTempLang(lang);
               setIsProfileOpen(true); 
             }} className="cursor-pointer">
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">{t.goodDay}</p>
@@ -2049,20 +2096,26 @@ export default function App() {
                     <div className="flex bg-slate-100 rounded-xl p-1 gap-1">
                       <button
                         type="button"
-                        onClick={() => setLang('bn')}
+                        onClick={() => {
+                          setTempLang('bn');
+                          console.log('Temp language set to BN');
+                        }}
                         className={cn(
                           "flex-1 py-3 rounded-lg text-[10px] font-black transition-all uppercase tracking-widest",
-                          lang === 'bn' ? "bg-white text-emerald-600 shadow-sm" : "text-slate-400 hover:text-slate-600"
+                          tempLang === 'bn' ? "bg-white text-emerald-600 shadow-sm" : "text-slate-400 hover:text-slate-600"
                         )}
                       >
                         বাংলা
                       </button>
                       <button
                         type="button"
-                        onClick={() => setLang('en')}
+                        onClick={() => {
+                          setTempLang('en');
+                          console.log('Temp language set to EN');
+                        }}
                         className={cn(
                           "flex-1 py-3 rounded-lg text-[10px] font-black transition-all uppercase tracking-widest",
-                          lang === 'en' ? "bg-white text-emerald-600 shadow-sm" : "text-slate-400 hover:text-slate-600"
+                          tempLang === 'en' ? "bg-white text-emerald-600 shadow-sm" : "text-slate-400 hover:text-slate-600"
                         )}
                       >
                         English
@@ -2073,17 +2126,20 @@ export default function App() {
                   <div className="pt-2 flex gap-3">
                     <button 
                       type="button"
-                      onClick={() => setIsProfileOpen(false)}
+                      onClick={() => {
+                        setIsProfileOpen(false);
+                        setTempLang(lang); // Reset temp lang
+                      }}
                       className="flex-1 py-4 rounded-2xl bg-slate-100 text-slate-500 font-bold text-sm hover:bg-slate-200 transition-all"
                     >
                       {t.cancel}
                     </button>
                     <button 
-                      disabled={authLoading || (newDisplayName.trim() === (user.displayName || '') && newPhotoURL.trim() === (user.photoURL || '') && lang === initialLang)}
+                      disabled={authLoading || (newDisplayName.trim() === (user.displayName || '') && newPhotoURL.trim() === (user.photoURL || '') && tempLang === initialLang)}
                       type="submit"
                       className={cn(
                         "flex-[2] py-4 rounded-2xl font-black text-sm transition-all active:scale-95",
-                        (newDisplayName.trim() !== (user.displayName || '') || newPhotoURL.trim() !== (user.photoURL || '') || lang !== initialLang) && !authLoading
+                        (newDisplayName.trim() !== (user.displayName || '') || newPhotoURL.trim() !== (user.photoURL || '') || tempLang !== initialLang) && !authLoading
                           ? "bg-emerald-500 text-slate-950 shadow-lg shadow-emerald-500/20" 
                           : "bg-slate-100 text-slate-400 opacity-50 cursor-not-allowed"
                       )}
