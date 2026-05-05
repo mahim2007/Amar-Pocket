@@ -143,6 +143,8 @@ export default function App() {
   const [authError, setAuthError] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const [photoUploadProgress, setPhotoUploadProgress] = useState(0);
   const [isAdminView, setIsAdminView] = useState(window.location.pathname === '/admin');
   const [notifications, setNotifications] = useState<{id: string, message: string, createdAt: string}[]>([]);
 
@@ -1108,10 +1110,15 @@ export default function App() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 10 * 1024 * 1024) {
-      showDialog(t.error, lang === 'bn' ? 'ফাইল সাইজ ১০ এমবি এর কম হতে হবে' : 'File size must be less than 10MB', 'error');
+    // Change limit to 2MB as requested
+    const maxSizeBytes = 2 * 1024 * 1024;
+    if (file.size > maxSizeBytes) {
+      showDialog(t.error, lang === 'bn' ? 'ফাইল সাইজ ২ এমবি এর কম হতে হবে' : 'File size must be less than 2MB', 'error');
       return;
     }
+
+    setIsUploadingPhoto(true);
+    setPhotoUploadProgress(0);
 
     const reader = new FileReader();
     reader.onloadend = () => {
@@ -1140,7 +1147,24 @@ export default function App() {
         ctx?.drawImage(img, 0, 0, width, height);
         
         const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.8);
-        setNewPhotoURL(compressedDataUrl);
+        
+        // Simulate upload progress animation
+        let progress = 0;
+        const interval = setInterval(() => {
+          progress += Math.random() * 15;
+          if (progress >= 100) {
+            progress = 100;
+            setPhotoUploadProgress(100);
+            clearInterval(interval);
+            setTimeout(() => {
+              setNewPhotoURL(compressedDataUrl);
+              setIsUploadingPhoto(false);
+              setPhotoUploadProgress(0);
+            }, 500);
+          } else {
+            setPhotoUploadProgress(progress);
+          }
+        }, 150);
       };
       img.src = reader.result as string;
     };
@@ -2028,23 +2052,65 @@ export default function App() {
                   onChange={handleImageUpload}
                 />
                 
-                <button 
-                  onClick={() => fileInputRef.current?.click()}
-                  className="w-24 h-24 rounded-[2rem] bg-emerald-500 border-4 border-white shadow-xl mx-auto mb-2 overflow-hidden relative group"
-                >
-                  {newPhotoURL ? (
-                    <img src={newPhotoURL} alt="User" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                  ) : user.photoURL ? (
-                    <img src={user.photoURL} alt="User" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-white font-black text-3xl uppercase">
-                      {user.displayName?.[0] || user.email?.[0]}
-                    </div>
+                <div className="w-24 h-24 mx-auto mb-2 relative group">
+                  {/* Circular Upload Progress */}
+                  {isUploadingPhoto && (
+                    <svg className="absolute -inset-2 w-[calc(100%+16px)] h-[calc(100%+16px)] -rotate-90 z-20 pointer-events-none">
+                      <circle
+                        cx="56"
+                        cy="56"
+                        r="52"
+                        fill="none"
+                        stroke="#f1f5f9"
+                        strokeWidth="4"
+                      />
+                      <circle
+                        cx="56"
+                        cy="56"
+                        r="52"
+                        fill="none"
+                        stroke="#10b981"
+                        strokeWidth="4"
+                        strokeDasharray="326.7"
+                        strokeDashoffset={326.7 * (1 - photoUploadProgress / 100)}
+                        strokeLinecap="round"
+                        className="transition-all duration-300"
+                      />
+                    </svg>
                   )}
-                  <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Plus className="w-8 h-8 text-white" />
-                  </div>
-                </button>
+                  
+                  <button 
+                    type="button" // Add type button to avoid form submission
+                    disabled={isUploadingPhoto}
+                    onClick={() => fileInputRef.current?.click()}
+                    className={cn(
+                      "w-full h-full rounded-[2rem] bg-emerald-500 border-4 border-white shadow-xl overflow-hidden relative group-hover:scale-105 transition-transform",
+                      isUploadingPhoto ? "grayscale opacity-50" : ""
+                    )}
+                  >
+                    {newPhotoURL ? (
+                      <img src={newPhotoURL} alt="User" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    ) : user.photoURL ? (
+                      <img src={user.photoURL} alt="User" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-white font-black text-3xl uppercase">
+                        {user.displayName?.[0] || user.email?.[0]}
+                      </div>
+                    )}
+                    
+                    {!isUploadingPhoto && (
+                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Plus className="w-8 h-8 text-white" />
+                      </div>
+                    )}
+
+                    {isUploadingPhoto && (
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <span className="text-white font-black text-xs drop-shadow-md">{Math.round(photoUploadProgress)}%</span>
+                      </div>
+                    )}
+                  </button>
+                </div>
                 <p className="text-[9px] font-black text-emerald-500 uppercase tracking-widest mb-4">{t.changePhoto}</p>
                 
                 <h3 className="text-xl font-black text-slate-900 mb-1">{user.displayName || t.user}</h3>
@@ -2107,18 +2173,25 @@ export default function App() {
                     >
                       {t.cancel}
                     </button>
-                    <button 
-                      disabled={authLoading || (newDisplayName.trim() === (user.displayName || '') && newPhotoURL.trim() === (user.photoURL || '') && tempLang === initialLang)}
-                      type="submit"
-                      className={cn(
-                        "flex-[2] py-4 rounded-2xl font-black text-sm transition-all active:scale-95",
-                        (newDisplayName.trim() !== (user.displayName || '') || newPhotoURL.trim() !== (user.photoURL || '') || tempLang !== initialLang) && !authLoading
-                          ? "bg-emerald-500 text-slate-950 shadow-lg shadow-emerald-500/20" 
-                          : "bg-slate-100 text-slate-400 opacity-50 cursor-not-allowed"
-                      )}
-                    >
-                      {authLoading ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : t.update}
-                    </button>
+                    {!isUploadingPhoto ? (
+                      <button 
+                        disabled={authLoading || (newDisplayName.trim() === (user.displayName || '') && newPhotoURL.trim() === (user.photoURL || '') && tempLang === initialLang)}
+                        type="submit"
+                        className={cn(
+                          "flex-[2] py-4 rounded-2xl font-black text-sm transition-all active:scale-95",
+                          (newDisplayName.trim() !== (user.displayName || '') || newPhotoURL.trim() !== (user.photoURL || '') || tempLang !== initialLang) && !authLoading
+                            ? "bg-emerald-500 text-slate-950 shadow-lg shadow-emerald-500/20" 
+                            : "bg-slate-100 text-slate-400 opacity-50 cursor-not-allowed"
+                        )}
+                      >
+                        {authLoading ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : t.update}
+                      </button>
+                    ) : (
+                      <div className="flex-[2] py-4 rounded-2xl bg-slate-50 text-slate-300 font-black text-sm flex items-center justify-center gap-2 border border-slate-100">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        {lang === 'bn' ? 'আপলোড হচ্ছে...' : 'Uploading...'}
+                      </div>
+                    )}
                   </div>
                 </form>
  
