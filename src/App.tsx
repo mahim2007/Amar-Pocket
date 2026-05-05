@@ -598,6 +598,9 @@ export default function App() {
           if (fullUserData && isMounted) {
             console.log('User synced:', fullUserData.email);
             setUser(prev => ({ ...prev, ...fullUserData }));
+            // Update profile edit form state with merged data (crucial for base64 photos)
+            if (fullUserData.displayName) setNewDisplayName(fullUserData.displayName);
+            if (fullUserData.photoURL) setNewPhotoURL(fullUserData.photoURL);
           }
         }).catch(err => console.error('Full auth sync failed:', err));
       }
@@ -625,21 +628,31 @@ export default function App() {
 
       const now = new Date().toISOString();
       const userPayload: any = {
-        displayName: currentUser.displayName || 'User',
-        email: currentUser.email || '',
         lastLogin: now,
         updatedAt: now,
-        photoURL: currentUser.photoURL || ''
       };
+
+      // Only sync fields from Auth if they are NOT empty
+      // This prevents overwriting base64 images in Firestore with empty Auth photoURL
+      if (currentUser.displayName) userPayload.displayName = currentUser.displayName;
+      if (currentUser.email) userPayload.email = currentUser.email;
+      if (currentUser.photoURL) userPayload.photoURL = currentUser.photoURL;
 
       if (!userDoc.exists()) {
         userPayload.createdAt = now;
         userPayload.blocked = false;
         userPayload.dismissedNotifications = [];
+        // Ensure required fields for new user
+        if (!userPayload.displayName) userPayload.displayName = 'User';
+        if (!userPayload.email) userPayload.email = '';
+        if (!userPayload.photoURL) userPayload.photoURL = '';
+        
         await setDoc(userDocRef, userPayload);
         return userPayload;
       } else {
+        // Only update fields that are in userPayload
         await updateDoc(userDocRef, userPayload);
+        // Important: return merged result so local state gets the preserved photoURL
         return { ...userData, ...userPayload };
       }
     } catch (err) {
