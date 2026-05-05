@@ -602,12 +602,14 @@ export default function App() {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (!isMounted) return;
       
+      console.log('Auth state change:', currentUser ? 'User: ' + currentUser.email : 'No user');
+      
       const isEmailPasswordUser = currentUser?.providerData?.some(p => p.providerId === 'password');
-      const needsEmailVerification = currentUser && !currentUser.emailVerified && isEmailPasswordUser;
+      const isGoogleUser = currentUser?.providerData?.some(p => p.providerId === 'google.com' || p.providerId === 'google');
+      const needsEmailVerification = currentUser && !currentUser.emailVerified && isEmailPasswordUser && !isGoogleUser;
       
       setIsVerifying(!!needsEmailVerification);
       
-      // Stop loading screen immediately as soon as we have an auth answer
       setUser(currentUser);
       setLoading(false);
 
@@ -615,13 +617,13 @@ export default function App() {
         setNewDisplayName(currentUser.displayName || '');
         setNewPhotoURL(currentUser.photoURL || '');
 
-        // Sync user to Firestore in background
         const userDocRef = doc(db, 'users', currentUser.uid);
         syncUserRecord(currentUser, userDocRef).then((fullUserData) => {
           if (fullUserData && isMounted) {
+            console.log('User synced:', fullUserData.email);
             setUser(prev => ({ ...prev, ...fullUserData }));
           }
-        }).catch(err => console.error('Background sync error:', err));
+        }).catch(err => console.error('Full auth sync failed:', err));
       }
     });
 
@@ -637,7 +639,8 @@ export default function App() {
       const userDoc = await getDoc(userDocRef);
       const userData = userDoc.exists() ? userDoc.data() as any : null;
       
-      if (userData?.blocked) {
+      if (userData?.blocked === true) {
+        console.warn('User is blocked in database:', currentUser.email);
         await signOut(auth);
         showDialog(t.error, lang === 'bn' ? 'আপনার অ্যাকাউন্টটি ব্লক করা হয়েছে।' : 'Your account has been blocked.', 'error');
         setUser(null);
@@ -777,14 +780,16 @@ export default function App() {
   // Auth Actions
   const handleGoogleLogin = async () => {
     setAuthLoading(true);
+    setLoading(true); // Show global loader during process
     setAuthError('');
-    auth.languageCode = lang; // Align popup language with app language
+    auth.languageCode = lang;
     
     try {
-      // Force popup for this environment
       const result = await signInWithPopup(auth, googleProvider);
       console.log('Google Login Success:', result.user.email);
+      // Let onAuthStateChanged handle the transition naturally
     } catch (error: any) {
+      setLoading(false); // Stop global loader if failed
       console.error('Google Login Error:', error);
       
       if (error.code === 'auth/popup-blocked') {
