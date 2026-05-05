@@ -126,6 +126,7 @@ export default function App() {
   const [note, setNote] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedQuickCategory, setSelectedQuickCategory] = useState('');
+  const [visibleCount, setVisibleCount] = useState(5);
 
   const filteredTransactions = useMemo(() => {
     return transactions.filter(tx => 
@@ -1775,9 +1776,10 @@ export default function App() {
                    )}
                 </div>
               ) : (
-                <motion.div layout className="space-y-3">
-                  {filteredTransactions.map((tx, i) => (
-                    <motion.div
+                <div className="space-y-4">
+                  <motion.div layout className="space-y-3">
+                    {(searchQuery ? filteredTransactions : filteredTransactions.slice(0, visibleCount)).map((tx, i) => (
+                      <motion.div
                       key={`tx-activity-${tx.id}`}
                       layout
                       initial={{ opacity: 0, scale: 0.9 }}
@@ -1825,7 +1827,17 @@ export default function App() {
                     </div>
                   </motion.div>
                   ))}
-                </motion.div>
+                  </motion.div>
+
+                  {!searchQuery && visibleCount < filteredTransactions.length && (
+                    <button
+                      onClick={() => setVisibleCount(prev => prev + 5)}
+                      className="w-full py-4 bg-white border border-slate-100 rounded-2xl text-slate-500 font-black text-[10px] uppercase tracking-widest hover:bg-slate-50 active:scale-95 transition-all shadow-sm"
+                    >
+                      {t.seeMore}
+                    </button>
+                  )}
+                </div>
               )}
             </AnimatePresence>
           </div>
