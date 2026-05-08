@@ -1195,13 +1195,28 @@ export default function App() {
             backgroundColor: '#ffffff'
           });
           
-          // Use 0.8 quality for crisp text with decent compression
-          const imgData = canvas.toDataURL('image/jpeg', 0.8); 
-          const pdf = new jsPDF('p', 'mm', 'a4', true);
           const imgWidth = 210;
+          const pageHeight = 297;
           const imgHeight = (canvas.height * imgWidth) / canvas.width;
+          let heightLeft = imgHeight;
           
-          pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, imgHeight, undefined, 'FAST');
+          const pdf = new jsPDF('p', 'mm', 'a4', true);
+          const imgData = canvas.toDataURL('image/jpeg', 0.9); 
+          
+          let position = 0;
+
+          // First page
+          pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
+          heightLeft -= pageHeight;
+
+          // Additional pages if content length exceeds one page
+          while (heightLeft > 0) {
+            position -= pageHeight;
+            pdf.addPage();
+            pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
+            heightLeft -= pageHeight;
+          }
+
           pdf.save(`${user?.displayName || 'pocket'}_statement_${days === 'all' ? (lang === 'bn' ? 'total' : 'total') : days + 'days'}.pdf`);
         } catch (err) {
           console.error('PDF Export failed', err);
