@@ -1198,9 +1198,21 @@ export default function App() {
           const imgWidth = 210;
           const pageHeight = 297;
           const imgHeight = (canvas.height * imgWidth) / canvas.width;
+          
+          if (isNaN(imgHeight) || imgHeight <= 0) {
+            throw new Error('Invalid canvas dimensions');
+          }
+
           let heightLeft = imgHeight;
           
-          const pdf = new jsPDF('p', 'mm', 'a4', true);
+          // orientations: p, units: mm, format: a4, compress: true
+          const pdf = new jsPDF({
+            orientation: 'p',
+            unit: 'mm',
+            format: 'a4',
+            compress: true
+          });
+          
           const imgData = canvas.toDataURL('image/jpeg', 0.9); 
           
           let position = 0;
@@ -1211,7 +1223,7 @@ export default function App() {
 
           // Additional pages if content length exceeds one page
           while (heightLeft > 0) {
-            position -= pageHeight;
+            position -= pageHeight; // Move to the next "slice" of the image
             pdf.addPage();
             pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
             heightLeft -= pageHeight;
@@ -1795,7 +1807,7 @@ export default function App() {
                   <motion.div layout className="space-y-3">
                     {(searchQuery ? filteredTransactions : filteredTransactions.slice(0, visibleCount)).map((tx, i) => (
                       <motion.div
-                      key={`tx-activity-${tx.id}`}
+                      key={`tx-activity-${tx.id}-${i}`}
                       layout
                       initial={{ opacity: 0, scale: 0.9 }}
                       animate={{ opacity: 1, scale: 1 }}
@@ -2329,7 +2341,7 @@ export default function App() {
                 ) : (
                   activeNotifications.map((notif, idx) => (
                     <motion.div 
-                      key={`notif-${notif.id}`}
+                      key={`notif-${notif.id}-${idx}`}
                       initial={{ opacity: 0, x: 20 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: idx * 0.05 }}
@@ -2433,13 +2445,13 @@ export default function App() {
                     </p>
                   </div>
                 ) : (
-                  trashItems.map((item) => {
+                  trashItems.map((item, idx) => {
                     const isOld = !isAfter(new Date(item.deletedAt), subDays(new Date(), 30));
                     if (isOld) return null;
                     
                     return (
                       <div 
-                        key={`trash-item-${item.id}`}
+                        key={`trash-item-${item.id}-${idx}`}
                         className="group p-5 bg-white border border-slate-100 rounded-[2rem] shadow-sm flex items-center gap-4"
                       >
                         <div className={cn(
@@ -2571,8 +2583,8 @@ export default function App() {
                     <td colSpan={5} className="py-20 text-center font-bold italic" style={{ color: '#cbd5e1' }}>{t.noTransactionsFound}</td>
                   </tr>
                 ) : (
-                  (exportDays === 'all' ? transactions : transactions.filter(t_item => isAfter(new Date(t_item.date), subDays(new Date(), exportDays as number)))).map((tx) => (
-                    <tr key={tx.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                  (exportDays === 'all' ? transactions : transactions.filter(t_item => isAfter(new Date(t_item.date), subDays(new Date(), exportDays as number)))).map((tx, i) => (
+                    <tr key={`${tx.id}-${i}`} style={{ borderBottom: '1px solid #f1f5f9' }}>
                       <td className="py-6">
                         <p className="font-bold text-sm tracking-tight" style={{ color: '#1e293b' }}>{format(new Date(tx.date), 'dd/MM/yyyy')}</p>
                       </td>
